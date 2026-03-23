@@ -52,6 +52,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 function extractAndSendImages(lowerKeyword, originalKeyword) {
+    let sourceName = 'unknown';
+    if (window.location.hostname.includes('google')) sourceName = 'google';
+    else if (window.location.hostname.includes('bing')) sourceName = 'bing';
+    else if (window.location.hostname.includes('baidu')) sourceName = 'baidu';
+
     const images = Array.from(document.querySelectorAll('img'));
     const matchedUrls = [];
     
@@ -73,7 +78,8 @@ function extractAndSendImages(lowerKeyword, originalKeyword) {
                 if (mData.murl) highResSrc = mData.murl;
             } catch(e) {}
         }
-        if (img.getAttribute('data-objurl')) highResSrc = img.getAttribute('data-objurl');
+        const baiduSrc = img.getAttribute('data-imgurl') || img.getAttribute('data-objurl') || img.getAttribute('objurl') || (img.dataset && img.dataset.imgurl);
+        if (baiduSrc) highResSrc = baiduSrc;
 
         // Try to parse imgurl from Google's anchor (often in /imgres?imgurl=...)
         if (anchor && anchor.href) {
@@ -85,6 +91,12 @@ function extractAndSendImages(lowerKeyword, originalKeyword) {
                     highResSrc = u.searchParams.get('url');
                 }
             } catch (err) {}
+        }
+        
+        // Google explicitly hides its high-res URLs. Instead of getting 0 images (because its thumbnails fail the 300x300 rule),
+        // we'll bypass the strict size filter for Google images so the user gets at least the Google thumbnails.
+        if (!highResSrc && sourceName === 'google' && src && !src.includes('cleardot.gif')) {
+            highResSrc = src;
         }
 
         const isMatch = alt.includes(lowerKeyword) || titleAttr.includes(lowerKeyword) || ariaLabel.includes(lowerKeyword) || textContent.includes(lowerKeyword);
@@ -111,7 +123,8 @@ function extractAndSendImages(lowerKeyword, originalKeyword) {
         chrome.runtime.sendMessage({
             action: 'downloadImages',
             images: uniqueUrls,
-            keyword: originalKeyword
+            keyword: originalKeyword,
+            source: sourceName
         });
     }
 }

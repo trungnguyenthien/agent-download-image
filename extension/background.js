@@ -39,6 +39,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const images = request.images;
         const keyword = request.keyword;
         const safeKeyword = keyword.replace(/[\/\\?%*:|"<>]/g, '-');
+        const sourceName = request.source || 'img';
         
         if (!images || images.length === 0) {
             console.log("Không có ảnh nào để tải từ một tab.");
@@ -50,7 +51,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         images.forEach((imgUrl, index) => {
             setTimeout(() => {
                 const timestamp = getTimestamp();
-                const filename = `${safeKeyword}/${timestamp}-${safeKeyword}.jpg`;
+                const filename = `${safeKeyword}/${sourceName}_${timestamp}-${safeKeyword}.jpg`;
                 
                 chrome.downloads.download({
                     url: imgUrl,
