@@ -1,27 +1,54 @@
 ## Chức năng chính
-Download ảnh gốc (không phải ảnh thumbnail) từ các công cụ search như: Google Image, Bing Image
+Download ảnh gốc (không phải ảnh thumbnail) từ công cụ tìm kiếm Bing Image. Ảnh được tìm kiếm, hiển thị, chọn lọc và download về máy.
+
+## Kiến trúc
+- **Frontend** (chạy trên browser): Giao diện web, gửi search request đến server.
+- **Backend** (`server.py`, chạy trên máy local): Nhận request, dùng Playwright truy cập Bing Images, trả JSON về cho frontend.
+- **Không cần Chrome Extension** — chỉ cần mở web app trên trình duyệt.
 
 ## Trình tự xử lý
-Dưới đây là trình tự xử lý khi user thực hiện:
 
 ### CLICK SEARCH BUTTON
-- Step 1: Validation: 
-    - user cần input đầy đủ các field: saveFolder, keywords.
-    - keywords là danh sách keyword ví dụ như "rắn lục", "rắn đuôi chuông", "rắn hổ mang"... mỗi keyword 1 line
-    - saveFolder là tên thư mục con trong thư mục /download/ để save ảnh download.
+**Step 1 — Validation:**
+- User cần input đầy đủ các field: `saveFolder`, `keywords`.
+- `keywords`: danh sách keyword, mỗi keyword 1 dòng. Ví dụ: `"rắn lục"`, `"rắn đuôi chuông"`, `"rắn hổ mang"`.
+- `saveFolder`: tên thư mục con trong thư mục Downloads để lưu ảnh.
 
-- Step 2: Get link ảnh gốc (ảnh chất lượng)
-    - Với mỗi keyword hãy thực hiện search trên webview iframe lần lượt trên các công cụ khác nhau theo thứ tự [Google Image, Bing Image]
-    - Mỗi keyword trong mỗi công cụ sẽ lấy 10 page kết quả.
-    - Mỗi ảnh kết quả sẽ có phần title hoặc alt, chỉ cần có chứa keyword thì sẽ hợp lệ.
-    - Lấy link ảnh chất lượng cao của các ảnh hợp lệ download về và hiển thị trong [Images result] grid (4 column, N row)
-    - Các ảnh trong [Images result] có thể selected và unselected. Tuy nhiên, mặc định nếu có 2 kích thước (width, height) đều lớn hơn 300 thì mặc định là selected, nếu có 1 cạnh nhỏ hơn 300 thì bị disable + unselected luôn.
-    - User có thể chuyển trạng thái selected <-> unselected cho các ảnh hợp lệ.
+**Step 2 — Search qua server:**
+- Frontend gọi `GET /search?keyword=...&engine=bing&page=N` đến `server.py`.
+- `server.py` dùng Playwright mở Bing Images, render trang, extract images từ DOM.
+- Mỗi keyword × mỗi engine × 10 pages = request riêng biệt.
+- Mỗi ảnh có `title` hoặc `alt` chứa keyword → hợp lệ.
 
+**Step 3 — Lấy ảnh gốc & kích thước:**
+- Bing lưu thumbnail URL với query param `?w=234&h=180...`. Để lấy ảnh gốc: strip query params, thêm `?w=2000`.
+- Server đọc 512 bytes đầu của ảnh (JPEG/PNG/GIF header) để lấy kích thước thật mà không cần tải full ảnh.
+- Ảnh có cả width VÀ height ≥ 300px → **selected** (mặc định).
+- Ảnh có width HOẶC height < 300px → **disabled** (không chọn được).
 
-### CLICK DOWNLOAD BUTTON
-- Download các selected image vào thư mục /Download/{saveFolder}
-- Đặt tên ảnh theo format sau: {source}-{nowTimestampt}-{keyword}.{image extension}
-    - source: "google", "bing"
-    - keyword: "rắn lục", "rắn đuôi chuông", "rắn hổ mang"...
-    - image extension: "jpg", "gif", "webp", "png"
+**Step 4 — Hiển thị grid:**
+- Images result hiển thị trong grid 4 cột, N dòng.
+- Mỗi card hiển thị: thumbnail, badge source (`bing`), kích thước, keyword.
+- User có thể click card để toggle selected ↔ unselected (với ảnh không disabled).
+
+**Step 5 — Download:**
+- Click Download button → download các ảnh đã selected.
+- File name format: `{source}-{timestamp}-{keyword}.{extension}`
+  - `source`: `"bing"`
+  - `keyword`: ví dụ `"rắn lục"`
+  - `extension`: `"jpg"`, `"png"`, `"gif"`, `"webp"`
+- Ảnh được download qua `fetch()` → blob URL → `<a download>`.
+
+## UI Layout (tham khảo homepage.png)
+1. **Header** — sticky, dark theme, logo + nav links (Home, Features, About).
+2. **Hero section** — tiêu đề + search box với:
+   - Input `Save Folder`
+   - Textarea `Keywords` (mỗi dòng 1 keyword)
+   - Toggle buttons: Google Images, Bing Images (mặc định cả 2 checked)
+   - Buttons: Search / Stop
+   - Progress bar (hiện khi đang search)
+3. **Features section** — 3 cards: Multi-Source Search, Original Quality, Batch Download.
+4. **Images Result** — grid 4 cột, badge count, Select All / Deselect All buttons.
+5. **Download bar** — selected count + Download button.
+6. **About section** — mô tả tool.
+7. **Footer**.

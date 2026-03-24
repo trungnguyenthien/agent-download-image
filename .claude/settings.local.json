@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(python3:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(/Users/trungnguyen/Library/Python/3.9/bin/playwright install:*)",
+      "Bash(curl -s \"http://127.0.0.1:8080/proxy?url=https%3A%2F%2Fwww.bing.com%2Fimages%2Fsearch%3Fq%3Dpanda%26first%3D0\")",
+      "Bash(grep -o 'm={\"\"\"\"[^\"\"\"\"]{0,200}')",
+      "Bash(curl -s \"http://127.0.0.1:8080/search?keyword=panda&engine=bing&page=0\")",
+      "Bash(1:*)",
+      "Bash(pip3 install:*)"
     ]
   }
 }
