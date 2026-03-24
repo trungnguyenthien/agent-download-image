@@ -13,6 +13,7 @@ class ImageSearchApp {
     this.selectedImages = new Set();
     this.searchTabs = [];
     this.isSearching = false;
+    this.processedUrls = new Set(); // Track processed URLs to avoid duplicates
 
     this.initializeDOM();
     this.attachEventListeners();
@@ -87,6 +88,7 @@ class ImageSearchApp {
     this.resultsSection.classList.add('hidden');
     this.images = [];
     this.selectedImages.clear();
+    this.processedUrls.clear(); // Clear processed URLs for new search
 
     // Step 2: Search for images
     await this.searchImages(keywordList, selectedEngines);
@@ -147,12 +149,14 @@ class ImageSearchApp {
 
     for (const keyword of keywords) {
       for (const engine of engines) {
-        this.updateStatus(`Searching: ${keyword} on ${engine}...`);
+        this.updateStatus(`🔍 Searching: "${keyword}" on ${engine}...`);
         
         await this.searchKeywordOnEngine(keyword, engine);
         
         completedSearches++;
         this.updateProgress(completedSearches, totalSearches);
+        
+        this.updateStatus(`✅ Completed: "${keyword}" on ${engine}. Total images: ${this.images.length}`);
       }
     }
 
@@ -171,9 +175,103 @@ class ImageSearchApp {
    * @param {string} engine - The search engine
    */
   async searchKeywordOnEngine(keyword, engine) {
-    const pagesPerSearch = 5;
+    // For infinite scroll engines (Yandex, DuckDuckGo), use single tab with multiple scrolls
+    // For traditional pagination engines (Bing), use multiple tabs
+    
+    if (engine === 'yandex' || engine === 'duckduckgo') {
+      await this.searchWithInfiniteScroll(keyword, engine);
+    } else {
+      await this.searchWithPagination(keyword, engine);
+    }
+  }
+
+  /**
+   * Search with infinite scroll (Yandex, DuckDuckGo)
+   * @param {string} keyword - The keyword to search
+   * @param {string} engine - The search engine
+   */
+  async searchWithInfiniteScroll(keyword, engine) {
+    console.log(`🎯 Starting infinite scroll search for "${keyword}" on ${engine}`);
+    const url = SearchEngine.getSearchUrl(engine, keyword, 1);
+    
+    try {
+      // Open search page in new tab
+      const tab = await chrome.tabs.create({ url, active: false });
+      this.searchTabs.push(tab.id);
+
+      // Wait for initial page load
+      await this.waitForTabLoad(tab.id);
+      await this.sleep(2000);
+
+      // Scroll multiple times to load more content (approximately 5 pages worth)
+      const scrollCount = 8; // 8 scrolls to get approximately 5 pages of content
+      
+      for (let i = 1; i <= scrollCount; i++) {
+        console.log(`🎯 ${engine}: Scroll ${i}/${scrollCount}`);
+        
+        // Scroll to bottom progressively
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: (iteration) => {
+              // Scroll incrementally to trigger lazy loading better
+              const scrollStep = document.body.scrollHeight / 3;
+              window.scrollBy(0, scrollStep);
+              
+              // Then scroll to absolute bottom
+              setTimeout(() => {
+                window.scrollTo(0, document.body.scrollHeight);
+              }, 500);
+            },
+            args: [i]
+          });
+        } catch (scrollError) {
+          console.log('⚠️ Could not scroll page:', scrollError);
+        }
+        
+        // Wait for new content to load
+        await this.sleep(1000); // Reduced from 1500ms
+        
+        // Scrape images after each scroll
+        try {
+          const response = await chrome.tabs.sendMessage(tab.id, {
+            action: 'scrapeImages',
+            engine: engine,
+            keyword: keyword
+          });
+
+          if (response && response.images) {
+            console.log(`🎯 Scraped ${response.images.length} images from ${engine} (scroll ${i})`);
+            await this.processScrapedImages(response.images, keyword);
+          }
+        } catch (msgError) {
+          console.log('⚠️ Error sending message:', msgError);
+        }
+      }
+
+      // Close the tab
+      await chrome.tabs.remove(tab.id);
+      this.searchTabs = this.searchTabs.filter(id => id !== tab.id);
+      
+      console.log(`✅ Completed infinite scroll search for "${keyword}" on ${engine}`);
+
+    } catch (error) {
+      console.error('‼️ Error searching:', error);
+    }
+  }
+
+  /**
+   * Search with traditional pagination (Bing)
+   * @param {string} keyword - The keyword to search
+   * @param {string} engine - The search engine
+   */
+  async searchWithPagination(keyword, engine) {
+    const pagesPerSearch = 5; // 5 pages per search
+    
+    console.log(`🎯 Starting pagination search for "${keyword}" on ${engine} (${pagesPerSearch} pages)`);
     
     for (let page = 1; page <= pagesPerSearch; page++) {
+      console.log(`🎯 ${engine}: Loading page ${page}/${pagesPerSearch}`);
       const url = SearchEngine.getSearchUrl(engine, keyword, page);
       
       try {
@@ -183,9 +281,7 @@ class ImageSearchApp {
 
         // Wait for page to load
         await this.waitForTabLoad(tab.id);
-        
-        // Wait longer and scroll to load dynamic content
-        await this.sleep(3000); // Increased wait time
+        await this.sleep(2000); // Reduced from 3000ms
         
         // Scroll page to trigger lazy loading
         try {
@@ -195,33 +291,43 @@ class ImageSearchApp {
               window.scrollTo(0, document.body.scrollHeight);
             }
           });
-          await this.sleep(2000); // Wait for lazy-loaded images
+          await this.sleep(1000); // Reduced from 2000ms
         } catch (scrollError) {
           console.log('⚠️ Could not scroll page:', scrollError);
         }
 
         // Scrape images from the page
-        const response = await chrome.tabs.sendMessage(tab.id, {
-          action: 'scrapeImages',
-          engine: engine,
-          keyword: keyword
-        });
+        try {
+          const response = await chrome.tabs.sendMessage(tab.id, {
+            action: 'scrapeImages',
+            engine: engine,
+            keyword: keyword
+          });
 
-        if (response && response.images) {
-          console.log(`🎯 Scraped ${response.images.length} images from ${engine}`);
-          await this.processScrapedImages(response.images, keyword);
-        } else {
-          console.log(`⚠️ No response from ${engine} scraper`);
+          if (response && response.images) {
+            console.log(`🎯 Scraped ${response.images.length} images from ${engine} page ${page}`);
+            await this.processScrapedImages(response.images, keyword);
+          } else {
+            console.log(`⚠️ No response from ${engine} scraper`);
+          }
+        } catch (msgError) {
+          console.log('⚠️ Could not scrape page (may be loading):', msgError.message);
         }
 
         // Close the tab
-        await chrome.tabs.remove(tab.id);
-        this.searchTabs = this.searchTabs.filter(id => id !== tab.id);
+        try {
+          await chrome.tabs.remove(tab.id);
+          this.searchTabs = this.searchTabs.filter(id => id !== tab.id);
+        } catch (closeError) {
+          console.log('⚠️ Could not close tab:', closeError.message);
+        }
 
       } catch (error) {
         console.error('‼️ Error searching:', error);
       }
     }
+    
+    console.log(`✅ Completed pagination search for "${keyword}" on ${engine}`);
   }
 
   /**
@@ -234,22 +340,20 @@ class ImageSearchApp {
     
     for (const img of scrapedImages) {
       try {
-        // Check if width and height are already provided
+        // Skip if already processed (avoid duplicates)
+        if (this.processedUrls.has(img.url)) {
+          continue;
+        }
+        
+        this.processedUrls.add(img.url);
+        
+        // Use dimensions from search engine directly (much faster)
         let dimensions = { width: img.width, height: img.height };
 
-        // If dimensions not available or are 0, try to get them
+        // Only fetch dimensions if completely missing
         if (!dimensions.width || !dimensions.height) {
-          console.log(`⚠️ Fetching dimensions for: ${img.url.substring(0, 50)}...`);
-          const fetchedDims = await ImageValidator.getImageDimensions(img.url);
-          
-          if (fetchedDims && fetchedDims.width && fetchedDims.height) {
-            dimensions = fetchedDims;
-          } else {
-            // If we can't get dimensions, assume reasonable defaults to not miss good images
-            // User can deselect manually if needed
-            console.log(`⚠️ Could not fetch dimensions, using defaults for: ${img.url.substring(0, 50)}...`);
-            dimensions = { width: 800, height: 600 }; // Assume decent size
-          }
+          // Assume reasonable defaults instead of fetching (to speed up)
+          dimensions = { width: 800, height: 600 };
         }
 
         // Validate dimensions (both width and height >= 300px)
@@ -268,7 +372,7 @@ class ImageSearchApp {
             selected: false
           });
 
-          console.log(`✅ Added valid image (${dimensions.width}x${dimensions.height}): ${img.url.substring(0, 50)}...`);
+          console.log(`✅ Added image (${dimensions.width}x${dimensions.height})`);
         } else {
           console.log(`⚠️ Image too small (${dimensions.width}x${dimensions.height}), skipping`);
         }
@@ -285,8 +389,15 @@ class ImageSearchApp {
    */
   waitForTabLoad(tabId) {
     return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(listener);
+        console.log('⚠️ Tab load timeout, proceeding anyway');
+        resolve();
+      }, 10000); // 10 second timeout
+
       const listener = (updatedTabId, changeInfo) => {
         if (updatedTabId === tabId && changeInfo.status === 'complete') {
+          clearTimeout(timeout);
           chrome.tabs.onUpdated.removeListener(listener);
           resolve();
         }

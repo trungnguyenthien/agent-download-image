@@ -29,24 +29,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  */
 function scrapeImagesFromPage(engine, keyword) {
   const images = [];
+  const seenUrls = new Set(); // Track URLs to avoid duplicates in this scrape
 
   console.log(`🎯 Scraping ${engine} for keyword: ${keyword}`);
 
+  let rawImages = [];
   switch (engine) {
     case 'bing':
-      images.push(...scrapeBingImages(keyword));
+      rawImages = scrapeBingImages(keyword);
       break;
     case 'duckduckgo':
-      images.push(...scrapeDuckDuckGoImages(keyword));
+      rawImages = scrapeDuckDuckGoImages(keyword);
       break;
     case 'yandex':
-      images.push(...scrapeYandexImages(keyword));
+      rawImages = scrapeYandexImages(keyword);
       break;
     default:
       console.error(`‼️ Unknown engine: ${engine}`);
   }
 
-  console.log(`✅ Found ${images.length} images from ${engine}`);
+  // Deduplicate by URL in this batch
+  rawImages.forEach(img => {
+    if (!seenUrls.has(img.url)) {
+      seenUrls.add(img.url);
+      images.push(img);
+    }
+  });
+
+  console.log(`✅ Found ${images.length} unique images from ${engine}`);
   
   if (images.length === 0) {
     console.log(`⚠️ No images found. Check if selectors are correct for ${engine}`);
