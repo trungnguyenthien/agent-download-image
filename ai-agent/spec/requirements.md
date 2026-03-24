@@ -1,10 +1,22 @@
-## Chức năng chính
-Download ảnh gốc (không phải ảnh thumbnail) từ công cụ tìm kiếm Bing Image. Ảnh được tìm kiếm, hiển thị, chọn lọc và download về máy.
+## General
+- Đây là Chrome extension v3.
+- Cung cấp chức năng tự search ảnh và download ảnh về máy.
+- Các nguồn ảnh gồm (search engine): Bing, DuckDuckGo, Baidu, Yandex
+- Không sử dụng webpack hay công cụ đóng gói.
+- Sử dụng `icon.png` làm icon cho extension
+- Thư mục root của extension là thư mục chứa `icon.png`
 
-## Kiến trúc
-- **Frontend** (chạy trên browser): Giao diện web, gửi search request đến server.
-- **Backend** (`server.py`, chạy trên máy local): Nhận request, dùng Playwright truy cập Bing Images, trả JSON về cho frontend.
-- **Không cần Chrome Extension** — chỉ cần mở web app trên trình duyệt.
+## Class & Function
+- Ưu tiên viết pure function (hạn chế biến toàn cục tham gia vào logic hàm, mỗi hàm nên giữ một trách nhiệm duy nhất).
+- Nên chia làm nhiều class, mỗi class thực hiện một nhóm nhiệm vụ cụ thể.
+
+## Comment & Log
+- Comment bằng tiếng Anh, không comment từng line, nhưng cần comment mô tả cho mỗi class và function.
+- Sử dụng tiếng Anh Log: step chính (🎯), success (✅), error (‼️), warning (⚠️).
+
+## UI
+- Khi user click vô action icon sẽ mở ra trang web như thiết kế ai-agent/spec/homepage.png
+
 
 ## Trình tự xử lý
 
@@ -14,41 +26,25 @@ Download ảnh gốc (không phải ảnh thumbnail) từ công cụ tìm kiếm
 - `keywords`: danh sách keyword, mỗi keyword 1 dòng. Ví dụ: `"rắn lục"`, `"rắn đuôi chuông"`, `"rắn hổ mang"`.
 - `saveFolder`: tên thư mục con trong thư mục Downloads để lưu ảnh.
 
-**Step 2 — Search qua server:**
-- Frontend gọi `GET /search?keyword=...&engine=bing&page=N` đến `server.py`.
-- `server.py` dùng Playwright mở Bing Images, render trang, extract images từ DOM.
-- Mỗi keyword × mỗi engine × 10 pages = request riêng biệt.
+**Step 2 — Search:**
+- Tự động mở tab ứng với từng `keyword` + `search engine`. (giải pháp để tránh vấn đề CORS)
+- Mỗi tab search (`keyword` + `search engine`) sẽ lấy 5 page kết qủa
 - Mỗi ảnh có `title` hoặc `alt` chứa keyword → hợp lệ.
 
 **Step 3 — Lấy ảnh gốc & kích thước:**
-- Bing lưu thumbnail URL với query param `?w=234&h=180...`. Để lấy ảnh gốc: strip query params, thêm `?w=2000`.
+- Trước khi load page tiếp theo hãy parse lấy link ảnh gốc của kết quả search (link ảnh chất lượng, không phải ảnh thubmnail)
 - Server đọc 512 bytes đầu của ảnh (JPEG/PNG/GIF header) để lấy kích thước thật mà không cần tải full ảnh.
-- Ảnh có cả width VÀ height ≥ 300px → **selected** (mặc định).
-- Ảnh có width HOẶC height < 300px → **disabled** (không chọn được).
+- Ảnh có cả width VÀ height ≥ 300px → **selected** sẽ được hiển thị trên Image Result Grid, ảnh không hợp lệ thì không được add vào grid.
 
 **Step 4 — Hiển thị grid:**
 - Images result hiển thị trong grid 4 cột, N dòng.
-- Mỗi card hiển thị: thumbnail, badge source (`bing`), kích thước, keyword.
-- User có thể click card để toggle selected ↔ unselected (với ảnh không disabled).
+- Mỗi card hiển thị: thumbnail, badge search engine (bing, duckduckgo, baidu, yandex) , kích thước, title hoặc alt của ảnh.
+- User có thể click card để toggle selected ↔ unselected .
 
-**Step 5 — Download:**
+### CLICK DOWNLOAD BUTTON
 - Click Download button → download các ảnh đã selected.
 - File name format: `{source}-{timestamp}-{keyword}.{extension}`
   - `source`: `"bing"`
   - `keyword`: ví dụ `"rắn lục"`
   - `extension`: `"jpg"`, `"png"`, `"gif"`, `"webp"`
 - Ảnh được download qua `fetch()` → blob URL → `<a download>`.
-
-## UI Layout (tham khảo homepage.png)
-1. **Header** — sticky, dark theme, logo + nav links (Home, Features, About).
-2. **Hero section** — tiêu đề + search box với:
-   - Input `Save Folder`
-   - Textarea `Keywords` (mỗi dòng 1 keyword)
-   - Toggle buttons: Google Images, Bing Images (mặc định cả 2 checked)
-   - Buttons: Search / Stop
-   - Progress bar (hiện khi đang search)
-3. **Features section** — 3 cards: Multi-Source Search, Original Quality, Batch Download.
-4. **Images Result** — grid 4 cột, badge count, Select All / Deselect All buttons.
-5. **Download bar** — selected count + Download button.
-6. **About section** — mô tả tool.
-7. **Footer**.
