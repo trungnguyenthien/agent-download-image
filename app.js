@@ -183,7 +183,22 @@ class ImageSearchApp {
 
         // Wait for page to load
         await this.waitForTabLoad(tab.id);
-        await this.sleep(2000); // Wait for dynamic content
+        
+        // Wait longer and scroll to load dynamic content
+        await this.sleep(3000); // Increased wait time
+        
+        // Scroll page to trigger lazy loading
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+              window.scrollTo(0, document.body.scrollHeight);
+            }
+          });
+          await this.sleep(2000); // Wait for lazy-loaded images
+        } catch (scrollError) {
+          console.log('⚠️ Could not scroll page:', scrollError);
+        }
 
         // Scrape images from the page
         const response = await chrome.tabs.sendMessage(tab.id, {
@@ -193,7 +208,10 @@ class ImageSearchApp {
         });
 
         if (response && response.images) {
+          console.log(`🎯 Scraped ${response.images.length} images from ${engine}`);
           await this.processScrapedImages(response.images, keyword);
+        } else {
+          console.log(`⚠️ No response from ${engine} scraper`);
         }
 
         // Close the tab
@@ -212,19 +230,26 @@ class ImageSearchApp {
    * @param {string} keyword - The search keyword
    */
   async processScrapedImages(scrapedImages, keyword) {
+    console.log(`🎯 Processing ${scrapedImages.length} scraped images`);
+    
     for (const img of scrapedImages) {
       try {
         // Check if width and height are already provided
         let dimensions = { width: img.width, height: img.height };
 
-        // If dimensions not available, try to get them
+        // If dimensions not available or are 0, try to get them
         if (!dimensions.width || !dimensions.height) {
-          dimensions = await ImageValidator.getImageDimensions(img.url);
-        }
-
-        if (!dimensions) {
-          console.log('⚠️ Could not get dimensions for:', img.url);
-          continue;
+          console.log(`⚠️ Fetching dimensions for: ${img.url.substring(0, 50)}...`);
+          const fetchedDims = await ImageValidator.getImageDimensions(img.url);
+          
+          if (fetchedDims && fetchedDims.width && fetchedDims.height) {
+            dimensions = fetchedDims;
+          } else {
+            // If we can't get dimensions, assume reasonable defaults to not miss good images
+            // User can deselect manually if needed
+            console.log(`⚠️ Could not fetch dimensions, using defaults for: ${img.url.substring(0, 50)}...`);
+            dimensions = { width: 800, height: 600 }; // Assume decent size
+          }
         }
 
         // Validate dimensions (both width and height >= 300px)
@@ -243,9 +268,9 @@ class ImageSearchApp {
             selected: false
           });
 
-          console.log('✅ Added valid image:', img.url);
+          console.log(`✅ Added valid image (${dimensions.width}x${dimensions.height}): ${img.url.substring(0, 50)}...`);
         } else {
-          console.log('⚠️ Image too small:', dimensions.width, 'x', dimensions.height);
+          console.log(`⚠️ Image too small (${dimensions.width}x${dimensions.height}), skipping`);
         }
       } catch (error) {
         console.error('‼️ Error processing image:', error);

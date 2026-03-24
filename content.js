@@ -30,6 +30,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 function scrapeImagesFromPage(engine, keyword) {
   const images = [];
 
+  console.log(`🎯 Scraping ${engine} for keyword: ${keyword}`);
+
   switch (engine) {
     case 'bing':
       images.push(...scrapeBingImages(keyword));
@@ -40,9 +42,16 @@ function scrapeImagesFromPage(engine, keyword) {
     case 'yandex':
       images.push(...scrapeYandexImages(keyword));
       break;
+    default:
+      console.error(`‼️ Unknown engine: ${engine}`);
   }
 
-  console.log(`✅ Found ${images.length} images`);
+  console.log(`✅ Found ${images.length} images from ${engine}`);
+  
+  if (images.length === 0) {
+    console.log(`⚠️ No images found. Check if selectors are correct for ${engine}`);
+  }
+  
   return images;
 }
 
@@ -53,9 +62,12 @@ function scrapeImagesFromPage(engine, keyword) {
  */
 function scrapeBingImages(keyword) {
   const images = [];
+  
+  console.log('🎯 Bing: Looking for images...');
   const imageElements = document.querySelectorAll('.iusc');
+  console.log(`🎯 Bing: Found ${imageElements.length} image elements`);
 
-  imageElements.forEach((elem) => {
+  imageElements.forEach((elem, index) => {
     try {
       const data = JSON.parse(elem.getAttribute('m') || '{}');
       const murl = data.murl; // Original image URL
@@ -63,20 +75,25 @@ function scrapeBingImages(keyword) {
       const width = data.w || 0;
       const height = data.h || 0;
 
-      if (murl && containsKeyword(title, keyword)) {
+      if (murl) {
         images.push({
           url: murl,
-          title: title,
+          title: title || keyword,
           width: width,
           height: height,
           source: 'bing'
         });
+        
+        if (index < 5) {
+          console.log(`✅ Bing image ${index + 1}: ${murl.substring(0, 60)}...`);
+        }
       }
     } catch (error) {
       console.error('‼️ Error parsing Bing image:', error);
     }
   });
 
+  console.log(`✅ Bing: Extracted ${images.length} images`);
   return images;
 }
 
@@ -87,27 +104,95 @@ function scrapeBingImages(keyword) {
  */
 function scrapeDuckDuckGoImages(keyword) {
   const images = [];
-  const imageElements = document.querySelectorAll('img[data-id]');
+  
+  console.log('🎯 DuckDuckGo: Looking for images...');
+  
+  // Try multiple selectors as DuckDuckGo structure can vary
+  // First try: specific tile images
+  let imageElements = document.querySelectorAll('.tile--img__img');
+  
+  // Fallback: try other possible selectors
+  if (imageElements.length === 0) {
+    imageElements = document.querySelectorAll('img[data-id]');
+  }
+  
+  if (imageElements.length === 0) {
+    imageElements = document.querySelectorAll('.tile img');
+  }
+  
+  // Last resort: get all images and filter
+  if (imageElements.length === 0) {
+    console.log('⚠️ DuckDuckGo: Using fallback - all img tags');
+    const allImages = document.querySelectorAll('img');
+    const validImages = [];
+    allImages.forEach(img => {
+      // Filter out tiny images (icons, logos, etc)
+      if (img.width > 100 || img.naturalWidth > 100 || img.getAttribute('width') > 100) {
+        validImages.push(img);
+      }
+    });
+    imageElements = validImages;
+  }
+  
+  console.log(`🎯 DuckDuckGo: Found ${imageElements.length} image elements`);
 
-  imageElements.forEach((img) => {
+  imageElements.forEach((img, index) => {
     try {
-      const src = img.getAttribute('data-src') || img.src;
-      const alt = img.alt || '';
+      // Get the highest quality source available
+      let src = img.getAttribute('data-src') || 
+                img.getAttribute('src') || 
+                img.currentSrc ||
+                img.getAttribute('data-lazy-src');
+      
+      // Skip if no valid source
+      if (!src || !src.startsWith('http')) {
+        return;
+      }
+      
+      // Skip DuckDuckGo's own assets
+      if (src.includes('duckduckgo.com') && !src.includes('external-content')) {
+        return;
+      }
+      
+      const alt = img.alt || img.title || '';
+      
+      // Try to get original image URL from parent element's data attributes or link
+      const parent = img.closest('[data-id]') || img.closest('.tile') || img.closest('a');
+      let originalUrl = src;
+      
+      if (parent) {
+        // Check if parent is a link with better URL
+        if (parent.tagName === 'A' && parent.href && parent.href.startsWith('http')) {
+          // For DuckDuckGo, the link might contain the image parameter
+          const linkUrl = parent.href;
+          if (linkUrl.includes('http') && !linkUrl.includes('duckduckgo.com/y.js')) {
+            originalUrl = linkUrl;
+          }
+        }
+      }
 
-      if (src && src.startsWith('http') && containsKeyword(alt, keyword)) {
+      // Use the better of src or originalUrl
+      const finalUrl = originalUrl.length > src.length ? originalUrl : src;
+
+      if (finalUrl && finalUrl.startsWith('http')) {
         images.push({
-          url: src,
-          title: alt,
-          width: img.naturalWidth || 0,
-          height: img.naturalHeight || 0,
+          url: finalUrl,
+          title: alt || keyword,
+          width: img.naturalWidth || img.width || 0,
+          height: img.naturalHeight || img.height || 0,
           source: 'duckduckgo'
         });
+        
+        if (index < 5) {
+          console.log(`✅ DuckDuckGo image ${index + 1}: ${finalUrl.substring(0, 60)}...`);
+        }
       }
     } catch (error) {
       console.error('‼️ Error parsing DuckDuckGo image:', error);
     }
   });
-
+  
+  console.log(`✅ DuckDuckGo: Extracted ${images.length} images`);
   return images;
 }
 
@@ -118,36 +203,100 @@ function scrapeDuckDuckGoImages(keyword) {
  */
 function scrapeYandexImages(keyword) {
   const images = [];
-  const imageElements = document.querySelectorAll('.serp-item__link');
+  
+  console.log('🎯 Yandex: Looking for images...');
+  
+  // Try multiple selectors for Yandex
+  let imageElements = document.querySelectorAll('.serp-item');
+  
+  if (imageElements.length === 0) {
+    imageElements = document.querySelectorAll('.MediaGrid-Item');
+  }
+  
+  if (imageElements.length === 0) {
+    imageElements = document.querySelectorAll('.serp-item__link');
+  }
+  
+  // Fallback: look for any images that might be search results
+  if (imageElements.length === 0) {
+    console.log('⚠️ Yandex: Using fallback - all img tags');
+    const allImages = document.querySelectorAll('img');
+    const validImages = [];
+    allImages.forEach(img => {
+      // Filter out tiny images (icons, logos, etc)
+      if (img.width > 100 || img.naturalWidth > 100) {
+        validImages.push(img.parentElement || img);
+      }
+    });
+    imageElements = validImages;
+  }
+  
+  console.log(`🎯 Yandex: Found ${imageElements.length} image elements`);
 
-  imageElements.forEach((elem) => {
+  imageElements.forEach((elem, index) => {
     try {
-      const img = elem.querySelector('img');
+      const img = elem.querySelector('img') || (elem.tagName === 'IMG' ? elem : null);
       if (!img) return;
 
-      const href = elem.href || '';
-      const alt = img.alt || '';
-      const width = parseInt(elem.getAttribute('data-bem')?.match(/"w":(\d+)/)?.[1] || '0');
-      const height = parseInt(elem.getAttribute('data-bem')?.match(/"h":(\d+)/)?.[1] || '0');
+      const alt = img.alt || img.title || '';
+      let imageUrl = img.src || img.getAttribute('src');
+      let width = 0;
+      let height = 0;
 
-      // Extract original URL from href
-      const urlMatch = href.match(/img_url=([^&]+)/);
-      const imageUrl = urlMatch ? decodeURIComponent(urlMatch[1]) : img.src;
+      // Try to get original image URL from parent link
+      const link = elem.querySelector('a') || elem.closest('a') || elem;
+      if (link && link.href) {
+        // Extract original URL from href parameter
+        const urlMatch = link.href.match(/img_url=([^&]+)/);
+        if (urlMatch) {
+          imageUrl = decodeURIComponent(urlMatch[1]);
+        } else if (link.href.startsWith('http') && !link.href.includes('yandex.')) {
+          // If href is a direct image URL (not yandex internal)
+          imageUrl = link.href;
+        }
+      }
 
-      if (imageUrl && containsKeyword(alt, keyword)) {
+      // Try to extract dimensions from data attributes
+      const dataJson = elem.getAttribute('data-bem') || elem.getAttribute('data-state');
+      if (dataJson) {
+        try {
+          const widthMatch = dataJson.match(/"w[idth]*":(\d+)/i);
+          const heightMatch = dataJson.match(/"h[eight]*":(\d+)/i);
+          if (widthMatch) width = parseInt(widthMatch[1]);
+          if (heightMatch) height = parseInt(heightMatch[1]);
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+
+      // Fallback to natural dimensions
+      if (!width) width = img.naturalWidth || img.width || 0;
+      if (!height) height = img.naturalHeight || img.height || 0;
+
+      if (imageUrl && imageUrl.startsWith('http')) {
+        // Skip Yandex's own assets
+        if (imageUrl.includes('yandex.') && !imageUrl.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
+          return;
+        }
+        
         images.push({
           url: imageUrl,
-          title: alt,
+          title: alt || keyword,
           width: width,
           height: height,
           source: 'yandex'
         });
+        
+        if (index < 5) {
+          console.log(`✅ Yandex image ${index + 1}: ${imageUrl.substring(0, 60)}...`);
+        }
       }
     } catch (error) {
       console.error('‼️ Error parsing Yandex image:', error);
     }
   });
-
+  
+  console.log(`✅ Yandex: Extracted ${images.length} images`);
   return images;
 }
 
