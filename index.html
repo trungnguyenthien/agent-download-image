@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Search & Download</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>🖼️ Image Search & Download</h1>
+    </header>
+
+    <!-- Input Section -->
+    <div class="input-section">
+      <div class="form-group">
+        <label for="saveFolder">📁 Save Folder:</label>
+        <input 
+          type="text" 
+          id="saveFolder" 
+          placeholder="e.g., my-images" 
+          class="input-field"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="keywords">🔍 Keywords (one per line):</label>
+        <textarea 
+          id="keywords" 
+          rows="5" 
+          placeholder="e.g.,&#10;rắn lục&#10;rắn đuôi chuông&#10;rắn hổ mang"
+          class="input-field textarea-field"
+        ></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Search Engines:</label>
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="engine-bing" value="bing" checked />
+            <span>Bing</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="engine-duckduckgo" value="duckduckgo" checked />
+            <span>DuckDuckGo</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="engine-yandex" value="yandex" checked />
+            <span>Yandex</span>
+          </label>
+        </div>
+      </div>
+
+      <button id="searchBtn" class="btn btn-primary">
+        🔍 Search Images
+      </button>
+    </div>
+
+    <!-- Status Section -->
+    <div id="statusSection" class="status-section hidden">
+      <div class="status-text" id="statusText"></div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <!-- Image Results Grid -->
+    <div id="resultsSection" class="results-section hidden">
+      <div class="results-header">
+        <h2>Image Results</h2>
+        <div class="results-actions">
+          <button id="selectAllBtn" class="btn btn-secondary">Select All</button>
+          <button id="deselectAllBtn" class="btn btn-secondary">Deselect All</button>
+          <button id="downloadBtn" class="btn btn-success">
+            ⬇️ Download Selected (<span id="selectedCount">0</span>)
+          </button>
+        </div>
+      </div>
+      
+      <div id="imageGrid" class="image-grid"></div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

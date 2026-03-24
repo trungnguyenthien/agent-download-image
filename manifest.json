@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Image Search & Download",
+  "version": "1.0.0",
+  "description": "Search and download images from Bing, DuckDuckGo, and Yandex",
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "action": {
+    "default_icon": "icon.png"
+  },
+  "permissions": [
+    "downloads",
+    "tabs",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
