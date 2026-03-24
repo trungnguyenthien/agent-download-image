@@ -57,6 +57,7 @@ function extractAndSendImages(lowerKeyword, originalKeyword) {
     else if (window.location.hostname.includes('bing')) sourceName = 'bing';
     else if (window.location.hostname.includes('baidu')) sourceName = 'baidu';
 
+    const fullHtml = sourceName === 'google' ? document.documentElement.innerHTML : '';
     const images = Array.from(document.querySelectorAll('img'));
     const matchedUrls = [];
     
@@ -81,24 +82,38 @@ function extractAndSendImages(lowerKeyword, originalKeyword) {
         const baiduSrc = img.getAttribute('data-imgurl') || img.getAttribute('data-objurl') || img.getAttribute('objurl') || (img.dataset && img.dataset.imgurl);
         if (baiduSrc) highResSrc = baiduSrc;
 
-        // Try to parse imgurl from Google's anchor (often in /imgres?imgurl=...)
-        if (anchor && anchor.href) {
-            try {
-                const u = new URL(anchor.href, window.location.origin);
-                if (u.searchParams.has('imgurl')) {
-                    highResSrc = u.searchParams.get('imgurl');
-                } else if (u.searchParams.has('url') && u.pathname.includes('imgres')) {
-                    highResSrc = u.searchParams.get('url');
+        // Google Google High-Res Extraction via internal JSON mapping (tbnid)
+        if (sourceName === 'google') {
+            const tbnContainer = img.closest('[data-tbnid]');
+            const tbnid = tbnContainer ? tbnContainer.getAttribute('data-tbnid') : null;
+            if (tbnid) {
+                const searchIdx = fullHtml.indexOf('"' + tbnid + '"');
+                if (searchIdx !== -1) {
+                    try {
+                        const slice = fullHtml.substring(searchIdx, searchIdx + 4000);
+                        // In Google's internal JSON, the high res URL and its dimensions usually look like: ["https://original.com/x.jpg", 1920, 1080]
+                        const match = slice.match(/\["(https?:\/\/[^"]+)",\d+,\d+\]/);
+                        if (match && match[1]) {
+                            // Unescape \u003d -> =, \u0026 -> & safely via JSON.parse
+                            highResSrc = JSON.parse('"' + match[1] + '"');
+                        }
+                    } catch(e) {}
                 }
-            } catch (err) {}
+            }
+            
+            // Fallback: Try to parse imgurl from Google's anchor (often in /imgres?imgurl=...)
+            if (!highResSrc && anchor && anchor.href) {
+                try {
+                    const u = new URL(anchor.href, window.location.origin);
+                    if (u.searchParams.has('imgurl')) {
+                        highResSrc = u.searchParams.get('imgurl');
+                    } else if (u.searchParams.has('url') && u.pathname.includes('imgres')) {
+                        highResSrc = u.searchParams.get('url');
+                    }
+                } catch (err) {}
+            }
         }
         
-        // Google explicitly hides its high-res URLs. Instead of getting 0 images (because its thumbnails fail the 300x300 rule),
-        // we'll bypass the strict size filter for Google images so the user gets at least the Google thumbnails.
-        if (!highResSrc && sourceName === 'google' && src && !src.includes('cleardot.gif')) {
-            highResSrc = src;
-        }
-
         const isMatch = alt.includes(lowerKeyword) || titleAttr.includes(lowerKeyword) || ariaLabel.includes(lowerKeyword) || textContent.includes(lowerKeyword);
         
         if (isMatch) {

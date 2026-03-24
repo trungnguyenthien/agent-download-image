@@ -9,8 +9,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             const encodedKeyword = encodeURIComponent(kw);
             const engines = [
                 `https://www.google.com/search?tbm=isch&q=${encodedKeyword}`,
-                `https://www.bing.com/images/search?q=${encodedKeyword}`,
-                `https://image.baidu.com/search/index?tn=baiduimage&word=${encodedKeyword}`
+                `https://www.bing.com/images/search?q=${encodedKeyword}`
             ];
             
             engines.forEach(url => {
