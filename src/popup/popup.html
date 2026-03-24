@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Origin Downloader</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header__logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <span class="header__title">Image Origin Downloader</span>
+    </div>
+    <span class="header__badge">v1.0</span>
+  </header>
+
+  <!-- ── Input Section ──────────────────────────────────────── -->
+  <section class="section">
+    <label class="field">
+      <span class="field__label">Save Folder</span>
+      <div class="field__input-wrap">
+        <svg class="field__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        <input id="saveFolder" type="text" class="field__input" placeholder="my-images" />
+      </div>
+    </label>
+
+    <label class="field">
+      <span class="field__label">Keywords <span class="field__hint">(one per line)</span></span>
+      <textarea id="keywords" class="field__textarea" rows="5" placeholder="rắn lục&#10;rắn đuôi chuông&#10;rắn hổ mang"></textarea>
+    </label>
+  </section>
+
+  <!-- ── Search Controls ─────────────────────────────────────── -->
+  <div class="controls">
+    <div class="controls__left">
+      <label class="checkbox-label">
+        <input id="googleCheck" type="checkbox" checked />
+        Google Image
+      </label>
+      <label class="checkbox-label">
+        <input id="bingCheck" type="checkbox" checked />
+        Bing Image
+      </label>
+    </div>
+    <div class="controls__right">
+      <span id="statusText" class="status-text"></span>
+    </div>
+  </div>
+
+  <div class="search-bar">
+    <button id="searchBtn" class="btn btn--primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      Search
+    </button>
+    <button id="stopBtn" class="btn btn--danger" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="6" y="6" width="12" height="12" rx="1"/>
+      </svg>
+      Stop
+    </button>
+  </div>
+
+  <!-- ── Progress Bar ─────────────────────────────────────────── -->
+  <div id="progressWrap" class="progress-wrap hidden">
+    <div class="progress-info">
+      <span id="progressLabel">Searching...</span>
+      <span id="progressCount">0 / 0</span>
+    </div>
+    <div class="progress-bar">
+      <div id="progressFill" class="progress-bar__fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- ── Images Result ────────────────────────────────────────── -->
+  <section class="section">
+    <div class="result-header">
+      <span class="result-header__title">
+        Images result
+        <span id="imageCount" class="badge">0</span>
+      </span>
+      <div class="result-header__actions">
+        <button id="selectAllBtn" class="btn btn--sm">Select All</button>
+        <button id="deselectAllBtn" class="btn btn--sm btn--outline">Deselect All</button>
+      </div>
+    </div>
+
+    <div id="imagesGrid" class="images-grid"></div>
+
+    <div id="emptyState" class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <p>No images yet. Enter keywords and click Search.</p>
+    </div>
+  </section>
+
+  <!-- ── Download ─────────────────────────────────────────────── -->
+  <div class="download-bar">
+    <span id="selectedCount" class="selected-count">0 selected</span>
+    <button id="downloadBtn" class="btn btn--success" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Download
+    </button>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
