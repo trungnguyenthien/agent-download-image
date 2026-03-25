@@ -15,7 +15,8 @@ class SearchEngine {
     
     switch (engine.toLowerCase()) {
       case 'google':
-        return `https://www.google.com/search?q=${encodedKeyword}&tbm=isch&start=${(page - 1) * 20}`;
+        // Google Images - simple URL without pagination (uses infinite scroll)
+        return `https://www.google.com/search?q=${encodedKeyword}&tbm=isch`;
       
       case 'bing':
         return `https://www.bing.com/images/search?q=${encodedKeyword}&first=${(page - 1) * 35 + 1}`;

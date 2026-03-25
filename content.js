@@ -79,33 +79,66 @@ function scrapeGoogleImages(keyword) {
   const allImages = document.querySelectorAll('img');
   console.log(`🎯 Google: Found ${allImages.length} img tags`);
   
+  let skippedEmpty = 0;
+  let skippedSmall = 0;
+  let accepted = 0;
+  
   allImages.forEach((img, index) => {
     try {
       const imageUrl = img.src;
-      const width = img.naturalWidth || img.width || 0;
-      const height = img.naturalHeight || img.height || 0;
+      
+      // Skip empty URLs
+      if (!imageUrl) {
+        skippedEmpty++;
+        return;
+      }
+      
+      // Accept both http/https URLs AND base64 data URLs
+      // Google uses data:image/jpeg;base64,... for thumbnails
+      const isValidUrl = imageUrl.startsWith('http') || imageUrl.startsWith('data:image/');
+      
+      if (!isValidUrl) {
+        skippedEmpty++;
+        return;
+      }
+      
+      // Get dimensions - use getAttribute first, fallback to properties
+      let width = parseInt(img.getAttribute('width')) || img.width || img.naturalWidth || 0;
+      let height = parseInt(img.getAttribute('height')) || img.height || img.naturalHeight || 0;
+      
+      // If dimensions unknown, assume they're valid
+      if (width === 0 && height === 0) {
+        width = 200;
+        height = 200;
+      }
+      
       const title = img.alt || img.title || '';
       
-      // Filter: both dimensions must be >= 150px
-      if (imageUrl && imageUrl.startsWith('http') && width >= 150 && height >= 150) {
-        images.push({
-          url: imageUrl,
-          title: title || keyword,
-          width: width,
-          height: height,
-          source: 'google'
-        });
-        
-        if (index < 3) {
-          console.log(`✅ Google image ${index + 1} (${width}x${height}): ${imageUrl.substring(0, 80)}...`);
-        }
+      // Skip only clearly tiny images (likely icons)
+      if (width > 0 && height > 0 && (width < 100 || height < 100)) {
+        skippedSmall++;
+        return;
+      }
+      
+      images.push({
+        url: imageUrl,
+        title: title || keyword,
+        width: width,
+        height: height,
+        source: 'google'
+      });
+      accepted++;
+      
+      if (accepted <= 5) {
+        const urlPreview = imageUrl.startsWith('data:') ? 'data:image/...' : imageUrl.substring(0, 60);
+        console.log(`✅ Google image ${accepted} (${width}x${height}): ${urlPreview}...`);
       }
     } catch (error) {
       console.error('‼️ Error parsing Google image:', error);
     }
   });
   
-  console.log(`✅ Google: Extracted ${images.length} images`);
+  console.log(`✅ Google: Extracted ${images.length} images (skipped: ${skippedEmpty} empty, ${skippedSmall} too small)`);
   return images;
 }
 
@@ -126,12 +159,31 @@ function scrapeBingImages(keyword) {
   allImages.forEach((img, index) => {
     try {
       const imageUrl = img.src;
-      const width = img.naturalWidth || img.width || 0;
-      const height = img.naturalHeight || img.height || 0;
+      
+      // Skip data URLs
+      if (!imageUrl || imageUrl.startsWith('data:')) {
+        return;
+      }
+      
+      // Get dimensions - try multiple sources
+      let width = parseInt(img.getAttribute('width')) || img.width || img.naturalWidth || 0;
+      let height = parseInt(img.getAttribute('height')) || img.height || img.naturalHeight || 0;
+      
+      // If dimensions unknown, assume valid
+      if (width === 0 && height === 0) {
+        width = 200;
+        height = 200;
+      }
+      
       const title = img.alt || img.title || '';
       
-      // Filter: both dimensions must be >= 150px
-      if (imageUrl && imageUrl.startsWith('http') && width >= 150 && height >= 150) {
+      // Skip only clearly tiny images
+      if (width > 0 && height > 0 && (width < 100 || height < 100)) {
+        return;
+      }
+      
+      // Accept all http/https images
+      if (imageUrl.startsWith('http')) {
         images.push({
           url: imageUrl,
           title: title || keyword,
@@ -140,7 +192,7 @@ function scrapeBingImages(keyword) {
           source: 'bing'
         });
         
-        if (index < 3) {
+        if (index < 5) {
           console.log(`✅ Bing image ${index + 1} (${width}x${height}): ${imageUrl.substring(0, 80)}...`);
         }
       }
@@ -279,12 +331,31 @@ function scrapeYandexImages(keyword) {
   allImages.forEach((img, index) => {
     try {
       const imageUrl = img.src;
-      const width = img.naturalWidth || img.width || 0;
-      const height = img.naturalHeight || img.height || 0;
+      
+      // Skip data URLs
+      if (!imageUrl || imageUrl.startsWith('data:')) {
+        return;
+      }
+      
+      // Get dimensions - try multiple sources
+      let width = parseInt(img.getAttribute('width')) || img.width || img.naturalWidth || 0;
+      let height = parseInt(img.getAttribute('height')) || img.height || img.naturalHeight || 0;
+      
+      // If dimensions unknown, assume valid
+      if (width === 0 && height === 0) {
+        width = 200;
+        height = 200;
+      }
+      
       const title = img.alt || img.title || '';
       
-      // Filter: both dimensions must be >= 150px
-      if (imageUrl && imageUrl.startsWith('http') && width >= 150 && height >= 150) {
+      // Skip only clearly tiny images
+      if (width > 0 && height > 0 && (width < 100 || height < 100)) {
+        return;
+      }
+      
+      // Accept all http/https images
+      if (imageUrl.startsWith('http')) {
         images.push({
           url: imageUrl,
           title: title || keyword,
@@ -293,7 +364,7 @@ function scrapeYandexImages(keyword) {
           source: 'yandex'
         });
         
-        if (index < 3) {
+        if (index < 5) {
           console.log(`✅ Yandex image ${index + 1} (${width}x${height}): ${imageUrl.substring(0, 80)}...`);
         }
       }

@@ -175,10 +175,10 @@ class ImageSearchApp {
    * @param {string} engine - The search engine
    */
   async searchKeywordOnEngine(keyword, engine) {
-    // For infinite scroll engines (Yandex), use single tab with multiple scrolls
-    // For traditional pagination engines (Bing), use multiple tabs
+    // Google and Yandex use infinite scroll
+    // Bing uses traditional pagination
     
-    if (engine === 'yandex') {
+    if (engine === 'google' || engine === 'yandex') {
       await this.searchWithInfiniteScroll(keyword, engine);
     } else {
       await this.searchWithPagination(keyword, engine);
@@ -201,7 +201,13 @@ class ImageSearchApp {
 
       // Wait for initial page load
       await this.waitForTabLoad(tab.id);
-      await this.sleep(2000);
+      
+      // Google needs more time to initialize
+      if (engine === 'google') {
+        await this.sleep(3000);
+      } else {
+        await this.sleep(2000);
+      }
 
       // Scroll multiple times to load more content (approximately 5 pages worth)
       const scrollCount = 8; // 8 scrolls to get approximately 5 pages of content
@@ -213,24 +219,45 @@ class ImageSearchApp {
         try {
           await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            func: (iteration) => {
-              // Scroll incrementally to trigger lazy loading better
-              const scrollStep = document.body.scrollHeight / 3;
-              window.scrollBy(0, scrollStep);
-              
-              // Then scroll to absolute bottom
-              setTimeout(() => {
+            func: (iteration, eng) => {
+              // For Google, scroll more aggressively to trigger lazy loading
+              if (eng === 'google') {
+                // Scroll to bottom immediately
                 window.scrollTo(0, document.body.scrollHeight);
-              }, 500);
+                
+                // Try to click "Show more results" button if it exists
+                setTimeout(() => {
+                  const moreButton = document.querySelector('input[value="Show more results"]') ||
+                                     document.querySelector('button[jsname]') ||
+                                     document.querySelector('[jscontroller][jsaction*="more"]');
+                  if (moreButton) {
+                    moreButton.click();
+                    console.log('Clicked "Show more" button');
+                  }
+                }, 300);
+              } else {
+                // For Yandex, scroll incrementally
+                const scrollStep = document.body.scrollHeight / 3;
+                window.scrollBy(0, scrollStep);
+                
+                setTimeout(() => {
+                  window.scrollTo(0, document.body.scrollHeight);
+                }, 500);
+              }
             },
-            args: [i]
+            args: [i, engine]
           });
         } catch (scrollError) {
           console.log('⚠️ Could not scroll page:', scrollError);
         }
         
         // Wait for new content to load
-        await this.sleep(1000); // Reduced from 1500ms
+        // Google needs more time between scrolls
+        if (engine === 'google') {
+          await this.sleep(1500);
+        } else {
+          await this.sleep(1000);
+        }
         
         // Scrape images after each scroll
         try {
@@ -277,26 +304,54 @@ class ImageSearchApp {
               func: (kw, eng) => {
                 const imgs = [];
                 
-                // Simple approach: get all images, filter by size >= 150px
+                // Get all images
                 const allImages = document.querySelectorAll('img');
+                console.log(`Direct scraping: Found ${allImages.length} images`);
                 
                 allImages.forEach(img => {
                   const src = img.src;
-                  const width = img.naturalWidth || img.width || 0;
-                  const height = img.naturalHeight || img.height || 0;
                   
-                  // Filter: both dimensions must be >= 150px
-                  if (src && src.startsWith('http') && width >= 150 && height >= 150) {
-                    imgs.push({
-                      url: src,
-                      title: img.alt || img.title || kw,
-                      width: width,
-                      height: height,
-                      source: eng
-                    });
+                  // Skip empty URLs
+                  if (!src) {
+                    return;
                   }
+                  
+                  // For Google, accept both http/https AND base64 data URLs
+                  // For other engines, only http/https
+                  let isValidUrl = src.startsWith('http');
+                  if (eng === 'google' && src.startsWith('data:image/')) {
+                    isValidUrl = true;
+                  }
+                  
+                  if (!isValidUrl) {
+                    return;
+                  }
+                  
+                  // Get dimensions - try multiple sources
+                  let width = parseInt(img.getAttribute('width')) || img.width || img.naturalWidth || 0;
+                  let height = parseInt(img.getAttribute('height')) || img.height || img.naturalHeight || 0;
+                  
+                  // If dimensions unknown, assume valid
+                  if (width === 0 && height === 0) {
+                    width = 200;
+                    height = 200;
+                  }
+                  
+                  // Skip only clearly tiny images
+                  if (width > 0 && height > 0 && (width < 100 || height < 100)) {
+                    return;
+                  }
+                  
+                  imgs.push({
+                    url: src,
+                    title: img.alt || img.title || kw,
+                    width: width,
+                    height: height,
+                    source: eng
+                  });
                 });
                 
+                console.log(`Direct scraping: Collected ${imgs.length} images`);
                 return imgs;
               },
               args: [keyword, engine]
@@ -405,26 +460,54 @@ class ImageSearchApp {
               func: (eng, kw) => {
                 const imgs = [];
                 
-                // Simple approach: get all images, filter by size >= 150px
+                // Get all images
                 const allImages = document.querySelectorAll('img');
+                console.log(`Pagination scraping: Found ${allImages.length} images`);
                 
                 allImages.forEach(img => {
                   const src = img.src;
-                  const width = img.naturalWidth || img.width || 0;
-                  const height = img.naturalHeight || img.height || 0;
                   
-                  // Filter: both dimensions must be >= 150px
-                  if (src && src.startsWith('http') && width >= 150 && height >= 150) {
-                    imgs.push({
-                      url: src,
-                      title: img.alt || img.title || kw,
-                      width: width,
-                      height: height,
-                      source: eng
-                    });
+                  // Skip empty URLs
+                  if (!src) {
+                    return;
                   }
+                  
+                  // For Google, accept both http/https AND base64 data URLs
+                  // For other engines, only http/https
+                  let isValidUrl = src.startsWith('http');
+                  if (eng === 'google' && src.startsWith('data:image/')) {
+                    isValidUrl = true;
+                  }
+                  
+                  if (!isValidUrl) {
+                    return;
+                  }
+                  
+                  // Get dimensions - try multiple sources
+                  let width = parseInt(img.getAttribute('width')) || img.width || img.naturalWidth || 0;
+                  let height = parseInt(img.getAttribute('height')) || img.height || img.naturalHeight || 0;
+                  
+                  // If dimensions unknown, assume valid
+                  if (width === 0 && height === 0) {
+                    width = 200;
+                    height = 200;
+                  }
+                  
+                  // Skip only clearly tiny images
+                  if (width > 0 && height > 0 && (width < 100 || height < 100)) {
+                    return;
+                  }
+                  
+                  imgs.push({
+                    url: src,
+                    title: img.alt || img.title || kw,
+                    width: width,
+                    height: height,
+                    source: eng
+                  });
                 });
                 
+                console.log(`Pagination scraping: Collected ${imgs.length} images`);
                 return imgs;
               },
               args: [engine, keyword]
@@ -488,7 +571,7 @@ class ImageSearchApp {
           dimensions = { width: 800, height: 600 };
         }
 
-        // Validate dimensions (both width and height >= 150px)
+        // Validate dimensions (both width and height >= 100px)
         if (ImageValidator.validateDimensions(dimensions.width, dimensions.height)) {
           const extension = ImageDownloader.getExtensionFromUrl(img.url);
           

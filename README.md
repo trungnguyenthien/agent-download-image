@@ -5,11 +5,12 @@ Chrome Extension v3 for searching and downloading images from multiple search en
 ## Features
 
 - 🔍 Search images across 3 search engines: Google, Bing, Yandex
-- ✅ Automatic image validation (minimum 150x150px)
+- ✅ Automatic image validation (minimum 100x100px)
 - 📦 Batch download multiple images
 - 🎯 Keyword matching in title/alt text
 - 🖼️ Grid view with image preview and metadata
 - 📁 Organized downloads in custom folders
+- 🎨 Supports both HTTP/HTTPS URLs and base64 data URLs (Google thumbnails)
 
 ## Installation
 
@@ -41,7 +42,7 @@ Chrome Extension v3 for searching and downloading images from multiple search en
 
 3. **Click "Search Images"**
    - The extension will automatically open tabs for each search
-   - Images are scraped and validated (>=150px width AND height)
+   - Images are scraped and validated (>=100px width AND height)
    - Only images with keywords in title/alt are included
    - Each search fetches 5 pages of results
 
@@ -85,14 +86,15 @@ agent-download-image/
 - Checks title/alt for keyword match
 - Reads first 512 bytes of image to parse dimensions
 - Supports JPEG, PNG, GIF formats
-- Validates both width AND height >= 150px
+- Validates both width AND height >= 100px
 
 ### Download Process
 
-- Fetches image via `fetch()` API
+- Fetches image via `fetch()` API (supports both HTTP URLs and base64 data URLs)
 - Creates blob URL
 - Triggers download via `<a download>`
 - Cleans up blob URLs after download
+- Automatically extracts file extension from MIME type for base64 images
 
 ## Permissions
 

@@ -109,7 +109,16 @@ class ImageDownloader {
    * @returns {string} File extension (jpg, png, gif, webp)
    */
   static getExtensionFromUrl(url) {
-    // Try to get extension from URL
+    // Handle base64 data URLs - extract MIME type
+    if (url.startsWith('data:image/')) {
+      const mimeMatch = url.match(/^data:image\/(jpeg|jpg|png|gif|webp)/i);
+      if (mimeMatch) {
+        const ext = mimeMatch[1].toLowerCase();
+        return ext === 'jpeg' ? 'jpg' : ext;
+      }
+    }
+    
+    // Try to get extension from regular URL
     const urlPath = url.split('?')[0];
     const match = urlPath.match(/\.(jpg|jpeg|png|gif|webp)$/i);
     
