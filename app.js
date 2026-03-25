@@ -277,97 +277,25 @@ class ImageSearchApp {
               func: (kw, eng) => {
                 const imgs = [];
                 
-                if (eng === 'yandex') {
-                  // Yandex-specific scraping - look for links with img_url parameter
-                  const allLinks = document.querySelectorAll('a[href*="/images/search"]');
-                  console.log(`Yandex: Found ${allLinks.length} image links`);
+                // Simple approach: get all images, filter by size >= 150px
+                const allImages = document.querySelectorAll('img');
+                
+                allImages.forEach(img => {
+                  const src = img.src;
+                  const width = img.naturalWidth || img.width || 0;
+                  const height = img.naturalHeight || img.height || 0;
                   
-                  allLinks.forEach(link => {
-                    try {
-                      if (link.href && link.href.includes('img_url=')) {
-                        const urlMatch = link.href.match(/img_url=([^&]+)/);
-                        if (urlMatch) {
-                          const imageUrl = decodeURIComponent(urlMatch[1]);
-                          
-                          let width = 800;
-                          let height = 600;
-                          
-                          const widthMatch = link.href.match(/[?&]w=(\d+)/);
-                          const heightMatch = link.href.match(/[?&]h=(\d+)/);
-                          if (widthMatch) width = parseInt(widthMatch[1]);
-                          if (heightMatch) height = parseInt(heightMatch[1]);
-                          
-                          const img = link.querySelector('img');
-                          const alt = img ? (img.alt || img.title || '') : '';
-                          
-                          if (imageUrl && imageUrl.startsWith('http')) {
-                            imgs.push({
-                              url: imageUrl,
-                              title: alt || kw,
-                              width: width,
-                              height: height,
-                              source: eng
-                            });
-                          }
-                        }
-                      }
-                    } catch (e) {
-                      // Skip errors
-                    }
-                  });
-                  
-                  // Fallback if no links found
-                  if (imgs.length === 0) {
-                    console.log('Yandex fallback: trying img tags');
-                    const allImages = document.querySelectorAll('img');
-                    allImages.forEach(img => {
-                      const width = img.naturalWidth || img.width || 0;
-                      const height = img.naturalHeight || img.height || 0;
-                      
-                      if (width > 150 && height > 150) {
-                        const src = img.src || img.getAttribute('data-src');
-                        if (src && src.startsWith('http')) {
-                          const parentLink = img.closest('a[href*="img_url"]');
-                          let originalUrl = src;
-                          
-                          if (parentLink && parentLink.href.includes('img_url=')) {
-                            const urlMatch = parentLink.href.match(/img_url=([^&]+)/);
-                            if (urlMatch) {
-                              originalUrl = decodeURIComponent(urlMatch[1]);
-                            }
-                          }
-                          
-                          imgs.push({
-                            url: originalUrl,
-                            title: img.alt || img.title || kw,
-                            width: width,
-                            height: height,
-                            source: eng
-                          });
-                        }
-                      }
+                  // Filter: both dimensions must be >= 150px
+                  if (src && src.startsWith('http') && width >= 150 && height >= 150) {
+                    imgs.push({
+                      url: src,
+                      title: img.alt || img.title || kw,
+                      width: width,
+                      height: height,
+                      source: eng
                     });
                   }
-                } else {
-                  // Generic scraping for other engines
-                  const allImages = document.querySelectorAll('img');
-                  
-                  allImages.forEach(img => {
-                    const src = img.src || img.getAttribute('data-src');
-                    const width = img.width || img.naturalWidth || 0;
-                    const height = img.height || img.naturalHeight || 0;
-                    
-                    if (src && src.startsWith('http') && width > 80 && height > 80) {
-                      imgs.push({
-                        url: src,
-                        title: img.alt || img.title || kw,
-                        width: width,
-                        height: height,
-                        source: eng
-                      });
-                    }
-                  });
-                }
+                });
                 
                 return imgs;
               },
@@ -477,63 +405,25 @@ class ImageSearchApp {
               func: (eng, kw) => {
                 const imgs = [];
                 
-                if (eng === 'google') {
-                  // Google Images scraping
-                  const elements = document.querySelectorAll('img');
-                  elements.forEach(img => {
-                    const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-iurl');
-                    const width = img.width || img.naturalWidth || 0;
-                    const height = img.height || img.naturalHeight || 0;
-                    
-                    if (src && src.startsWith('http') && width > 100 && height > 100) {
-                      if (!src.includes('google.com') || src.includes('googleusercontent')) {
-                        imgs.push({
-                          url: src,
-                          title: img.alt || img.title || kw,
-                          width: width,
-                          height: height,
-                          source: 'google'
-                        });
-                      }
-                    }
-                  });
-                } else if (eng === 'bing') {
-                  const elements = document.querySelectorAll('.iusc');
-                  elements.forEach(elem => {
-                    try {
-                      const data = JSON.parse(elem.getAttribute('m') || '{}');
-                      if (data.murl) {
-                        imgs.push({
-                          url: data.murl,
-                          title: data.t || kw,
-                          width: data.w || 0,
-                          height: data.h || 0,
-                          source: 'bing'
-                        });
-                      }
-                    } catch (e) {}
-                  });
-                } else {
-                  // Generic scraping for Yandex
-                  const allImages = document.querySelectorAll('img');
-                  allImages.forEach(img => {
-                    const src = img.src || img.getAttribute('data-src');
-                    const width = img.width || img.naturalWidth || 0;
-                    const height = img.height || img.naturalHeight || 0;
-                    
-                    if (src && src.startsWith('http') && width > 80 && height > 80) {
-                      if (!src.includes(eng + '.com') || src.includes('external')) {
-                        imgs.push({
-                          url: src,
-                          title: img.alt || img.title || kw,
-                          width: width,
-                          height: height,
-                          source: eng
-                        });
-                      }
-                    }
-                  });
-                }
+                // Simple approach: get all images, filter by size >= 150px
+                const allImages = document.querySelectorAll('img');
+                
+                allImages.forEach(img => {
+                  const src = img.src;
+                  const width = img.naturalWidth || img.width || 0;
+                  const height = img.naturalHeight || img.height || 0;
+                  
+                  // Filter: both dimensions must be >= 150px
+                  if (src && src.startsWith('http') && width >= 150 && height >= 150) {
+                    imgs.push({
+                      url: src,
+                      title: img.alt || img.title || kw,
+                      width: width,
+                      height: height,
+                      source: eng
+                    });
+                  }
+                });
                 
                 return imgs;
               },
@@ -598,7 +488,7 @@ class ImageSearchApp {
           dimensions = { width: 800, height: 600 };
         }
 
-        // Validate dimensions (both width and height >= 300px)
+        // Validate dimensions (both width and height >= 150px)
         if (ImageValidator.validateDimensions(dimensions.width, dimensions.height)) {
           const extension = ImageDownloader.getExtensionFromUrl(img.url);
           

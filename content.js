@@ -75,69 +75,30 @@ function scrapeGoogleImages(keyword) {
   
   console.log('🎯 Google: Looking for images...');
   
-  // Google Images uses various selectors
-  // Try multiple approaches
-  let imageElements = document.querySelectorAll('img[data-src]');
+  // Get all images on the page
+  const allImages = document.querySelectorAll('img');
+  console.log(`🎯 Google: Found ${allImages.length} img tags`);
   
-  if (imageElements.length === 0) {
-    imageElements = document.querySelectorAll('.rg_i');
-  }
-  
-  if (imageElements.length === 0) {
-    // Fallback: get all images with decent size
-    const allImgs = document.querySelectorAll('img');
-    const filtered = [];
-    allImgs.forEach(img => {
-      const width = img.width || img.naturalWidth || 0;
-      const height = img.height || img.naturalHeight || 0;
-      if (width > 100 && height > 100) {
-        filtered.push(img);
-      }
-    });
-    imageElements = filtered;
-  }
-  
-  console.log(`🎯 Google: Found ${imageElements.length} image elements`);
-
-  imageElements.forEach((img, index) => {
+  allImages.forEach((img, index) => {
     try {
-      // Try to get the original image URL from data attributes
-      let imageUrl = img.getAttribute('data-src') || 
-                     img.getAttribute('data-iurl') ||
-                     img.src;
-      
+      const imageUrl = img.src;
+      const width = img.naturalWidth || img.width || 0;
+      const height = img.naturalHeight || img.height || 0;
       const title = img.alt || img.title || '';
       
-      // Skip invalid URLs
-      if (!imageUrl || !imageUrl.startsWith('http')) {
-        return;
-      }
-      
-      // Skip Google's own assets
-      if (imageUrl.includes('google.com') && !imageUrl.includes('googleusercontent')) {
-        return;
-      }
-      
-      // Try to get dimensions from parent element's metadata
-      let width = 0;
-      let height = 0;
-      
-      const parent = img.closest('[data-w]') || img.closest('div[jsname]');
-      if (parent) {
-        width = parseInt(parent.getAttribute('data-w')) || 0;
-        height = parseInt(parent.getAttribute('data-h')) || 0;
-      }
-
-      images.push({
-        url: imageUrl,
-        title: title || keyword,
-        width: width || 0,
-        height: height || 0,
-        source: 'google'
-      });
-      
-      if (index < 5) {
-        console.log(`✅ Google image ${index + 1}: ${imageUrl.substring(0, 80)}...`);
+      // Filter: both dimensions must be >= 150px
+      if (imageUrl && imageUrl.startsWith('http') && width >= 150 && height >= 150) {
+        images.push({
+          url: imageUrl,
+          title: title || keyword,
+          width: width,
+          height: height,
+          source: 'google'
+        });
+        
+        if (index < 3) {
+          console.log(`✅ Google image ${index + 1} (${width}x${height}): ${imageUrl.substring(0, 80)}...`);
+        }
       }
     } catch (error) {
       console.error('‼️ Error parsing Google image:', error);
@@ -157,35 +118,37 @@ function scrapeBingImages(keyword) {
   const images = [];
   
   console.log('🎯 Bing: Looking for images...');
-  const imageElements = document.querySelectorAll('.iusc');
-  console.log(`🎯 Bing: Found ${imageElements.length} image elements`);
-
-  imageElements.forEach((elem, index) => {
+  
+  // Get all images on the page
+  const allImages = document.querySelectorAll('img');
+  console.log(`🎯 Bing: Found ${allImages.length} img tags`);
+  
+  allImages.forEach((img, index) => {
     try {
-      const data = JSON.parse(elem.getAttribute('m') || '{}');
-      const murl = data.murl; // Original image URL
-      const title = data.t || '';
-      const width = data.w || 0;
-      const height = data.h || 0;
-
-      if (murl) {
+      const imageUrl = img.src;
+      const width = img.naturalWidth || img.width || 0;
+      const height = img.naturalHeight || img.height || 0;
+      const title = img.alt || img.title || '';
+      
+      // Filter: both dimensions must be >= 150px
+      if (imageUrl && imageUrl.startsWith('http') && width >= 150 && height >= 150) {
         images.push({
-          url: murl,
+          url: imageUrl,
           title: title || keyword,
           width: width,
           height: height,
           source: 'bing'
         });
         
-        if (index < 5) {
-          console.log(`✅ Bing image ${index + 1}: ${murl.substring(0, 60)}...`);
+        if (index < 3) {
+          console.log(`✅ Bing image ${index + 1} (${width}x${height}): ${imageUrl.substring(0, 80)}...`);
         }
       }
     } catch (error) {
       console.error('‼️ Error parsing Bing image:', error);
     }
   });
-
+  
   console.log(`✅ Bing: Extracted ${images.length} images`);
   return images;
 }
@@ -309,91 +272,35 @@ function scrapeYandexImages(keyword) {
   
   console.log('🎯 Yandex: Looking for images...');
   
-  // Get all links on the page
-  const allLinks = document.querySelectorAll('a[href*="/images/search"]');
-  console.log(`🎯 Yandex: Found ${allLinks.length} image links`);
+  // Get all images on the page
+  const allImages = document.querySelectorAll('img');
+  console.log(`🎯 Yandex: Found ${allImages.length} img tags`);
   
-  allLinks.forEach((link, index) => {
+  allImages.forEach((img, index) => {
     try {
-      // Extract img_url parameter from href
-      if (link.href && link.href.includes('img_url=')) {
-        const urlMatch = link.href.match(/img_url=([^&]+)/);
-        if (urlMatch) {
-          const imageUrl = decodeURIComponent(urlMatch[1]);
-          
-          // Also try to get dimensions from URL
-          let width = 800;
-          let height = 600;
-          
-          const widthMatch = link.href.match(/[?&]w=(\d+)/);
-          const heightMatch = link.href.match(/[?&]h=(\d+)/);
-          if (widthMatch) width = parseInt(widthMatch[1]);
-          if (heightMatch) height = parseInt(heightMatch[1]);
-          
-          // Get alt text from img inside link
-          const img = link.querySelector('img');
-          const alt = img ? (img.alt || img.title || '') : '';
-          
-          if (imageUrl && imageUrl.startsWith('http')) {
-            images.push({
-              url: imageUrl,
-              title: alt || keyword,
-              width: width,
-              height: height,
-              source: 'yandex'
-            });
-            
-            if (index < 3) {
-              console.log(`✅ Yandex image ${index + 1} (${width}x${height}): ${imageUrl.substring(0, 80)}...`);
-            }
-          }
+      const imageUrl = img.src;
+      const width = img.naturalWidth || img.width || 0;
+      const height = img.naturalHeight || img.height || 0;
+      const title = img.alt || img.title || '';
+      
+      // Filter: both dimensions must be >= 150px
+      if (imageUrl && imageUrl.startsWith('http') && width >= 150 && height >= 150) {
+        images.push({
+          url: imageUrl,
+          title: title || keyword,
+          width: width,
+          height: height,
+          source: 'yandex'
+        });
+        
+        if (index < 3) {
+          console.log(`✅ Yandex image ${index + 1} (${width}x${height}): ${imageUrl.substring(0, 80)}...`);
         }
       }
     } catch (error) {
       console.error('‼️ Error parsing Yandex image:', error);
     }
   });
-  
-  // Fallback: if no images found with img_url, try getting all images
-  if (images.length === 0) {
-    console.log('⚠️ Yandex: No img_url found, trying fallback method');
-    const allImages = document.querySelectorAll('img');
-    console.log(`🎯 Yandex fallback: Found ${allImages.length} img tags`);
-    
-    allImages.forEach((img, index) => {
-      // Skip very small images (icons, logos)
-      const width = img.naturalWidth || img.width || 0;
-      const height = img.naturalHeight || img.height || 0;
-      
-      if (width > 150 && height > 150) {
-        const src = img.src || img.getAttribute('data-src');
-        if (src && src.startsWith('http')) {
-          // Try to find parent link with original URL
-          const parentLink = img.closest('a[href*="img_url"]');
-          let originalUrl = src;
-          
-          if (parentLink && parentLink.href.includes('img_url=')) {
-            const urlMatch = parentLink.href.match(/img_url=([^&]+)/);
-            if (urlMatch) {
-              originalUrl = decodeURIComponent(urlMatch[1]);
-            }
-          }
-          
-          images.push({
-            url: originalUrl,
-            title: img.alt || img.title || keyword,
-            width: width,
-            height: height,
-            source: 'yandex'
-          });
-          
-          if (index < 3) {
-            console.log(`✅ Yandex fallback image ${index + 1}: ${originalUrl.substring(0, 80)}...`);
-          }
-        }
-      }
-    });
-  }
   
   console.log(`✅ Yandex: Extracted ${images.length} images`);
   return images;

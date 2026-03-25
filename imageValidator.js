@@ -22,10 +22,10 @@ class ImageValidator {
    * Validate image dimensions against minimum requirements
    * @param {number} width - Image width in pixels
    * @param {number} height - Image height in pixels
-   * @param {number} minSize - Minimum size for both width and height (default 300px)
+   * @param {number} minSize - Minimum size for both width and height (default 150px)
    * @returns {boolean} True if both dimensions meet requirements
    */
-  static validateDimensions(width, height, minSize = 300) {
+  static validateDimensions(width, height, minSize = 150) {
     return width >= minSize && height >= minSize;
   }
 
