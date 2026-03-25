@@ -309,95 +309,91 @@ function scrapeYandexImages(keyword) {
   
   console.log('🎯 Yandex: Looking for images...');
   
-  // Try multiple selectors for Yandex
-  let imageElements = document.querySelectorAll('.serp-item');
+  // Get all links on the page
+  const allLinks = document.querySelectorAll('a[href*="/images/search"]');
+  console.log(`🎯 Yandex: Found ${allLinks.length} image links`);
   
-  if (imageElements.length === 0) {
-    imageElements = document.querySelectorAll('.MediaGrid-Item');
-  }
-  
-  if (imageElements.length === 0) {
-    imageElements = document.querySelectorAll('.serp-item__link');
-  }
-  
-  // Fallback: look for any images that might be search results
-  if (imageElements.length === 0) {
-    console.log('⚠️ Yandex: Using fallback - all img tags');
-    const allImages = document.querySelectorAll('img');
-    const validImages = [];
-    allImages.forEach(img => {
-      // Filter out tiny images (icons, logos, etc)
-      if (img.width > 100 || img.naturalWidth > 100) {
-        validImages.push(img.parentElement || img);
-      }
-    });
-    imageElements = validImages;
-  }
-  
-  console.log(`🎯 Yandex: Found ${imageElements.length} image elements`);
-
-  imageElements.forEach((elem, index) => {
+  allLinks.forEach((link, index) => {
     try {
-      const img = elem.querySelector('img') || (elem.tagName === 'IMG' ? elem : null);
-      if (!img) return;
-
-      const alt = img.alt || img.title || '';
-      let imageUrl = img.src || img.getAttribute('src');
-      let width = 0;
-      let height = 0;
-
-      // Try to get original image URL from parent link
-      const link = elem.querySelector('a') || elem.closest('a') || elem;
-      if (link && link.href) {
-        // Extract original URL from href parameter
+      // Extract img_url parameter from href
+      if (link.href && link.href.includes('img_url=')) {
         const urlMatch = link.href.match(/img_url=([^&]+)/);
         if (urlMatch) {
-          imageUrl = decodeURIComponent(urlMatch[1]);
-        } else if (link.href.startsWith('http') && !link.href.includes('yandex.')) {
-          // If href is a direct image URL (not yandex internal)
-          imageUrl = link.href;
-        }
-      }
-
-      // Try to extract dimensions from data attributes
-      const dataJson = elem.getAttribute('data-bem') || elem.getAttribute('data-state');
-      if (dataJson) {
-        try {
-          const widthMatch = dataJson.match(/"w[idth]*":(\d+)/i);
-          const heightMatch = dataJson.match(/"h[eight]*":(\d+)/i);
+          const imageUrl = decodeURIComponent(urlMatch[1]);
+          
+          // Also try to get dimensions from URL
+          let width = 800;
+          let height = 600;
+          
+          const widthMatch = link.href.match(/[?&]w=(\d+)/);
+          const heightMatch = link.href.match(/[?&]h=(\d+)/);
           if (widthMatch) width = parseInt(widthMatch[1]);
           if (heightMatch) height = parseInt(heightMatch[1]);
-        } catch (e) {
-          // Ignore parse errors
-        }
-      }
-
-      // Fallback to natural dimensions
-      if (!width) width = img.naturalWidth || img.width || 0;
-      if (!height) height = img.naturalHeight || img.height || 0;
-
-      if (imageUrl && imageUrl.startsWith('http')) {
-        // Skip Yandex's own assets
-        if (imageUrl.includes('yandex.') && !imageUrl.match(/\.(jpg|jpeg|png|gif|webp)/i)) {
-          return;
-        }
-        
-        images.push({
-          url: imageUrl,
-          title: alt || keyword,
-          width: width,
-          height: height,
-          source: 'yandex'
-        });
-        
-        if (index < 5) {
-          console.log(`✅ Yandex image ${index + 1}: ${imageUrl.substring(0, 60)}...`);
+          
+          // Get alt text from img inside link
+          const img = link.querySelector('img');
+          const alt = img ? (img.alt || img.title || '') : '';
+          
+          if (imageUrl && imageUrl.startsWith('http')) {
+            images.push({
+              url: imageUrl,
+              title: alt || keyword,
+              width: width,
+              height: height,
+              source: 'yandex'
+            });
+            
+            if (index < 3) {
+              console.log(`✅ Yandex image ${index + 1} (${width}x${height}): ${imageUrl.substring(0, 80)}...`);
+            }
+          }
         }
       }
     } catch (error) {
       console.error('‼️ Error parsing Yandex image:', error);
     }
   });
+  
+  // Fallback: if no images found with img_url, try getting all images
+  if (images.length === 0) {
+    console.log('⚠️ Yandex: No img_url found, trying fallback method');
+    const allImages = document.querySelectorAll('img');
+    console.log(`🎯 Yandex fallback: Found ${allImages.length} img tags`);
+    
+    allImages.forEach((img, index) => {
+      // Skip very small images (icons, logos)
+      const width = img.naturalWidth || img.width || 0;
+      const height = img.naturalHeight || img.height || 0;
+      
+      if (width > 150 && height > 150) {
+        const src = img.src || img.getAttribute('data-src');
+        if (src && src.startsWith('http')) {
+          // Try to find parent link with original URL
+          const parentLink = img.closest('a[href*="img_url"]');
+          let originalUrl = src;
+          
+          if (parentLink && parentLink.href.includes('img_url=')) {
+            const urlMatch = parentLink.href.match(/img_url=([^&]+)/);
+            if (urlMatch) {
+              originalUrl = decodeURIComponent(urlMatch[1]);
+            }
+          }
+          
+          images.push({
+            url: originalUrl,
+            title: img.alt || img.title || keyword,
+            width: width,
+            height: height,
+            source: 'yandex'
+          });
+          
+          if (index < 3) {
+            console.log(`✅ Yandex fallback image ${index + 1}: ${originalUrl.substring(0, 80)}...`);
+          }
+        }
+      }
+    });
+  }
   
   console.log(`✅ Yandex: Extracted ${images.length} images`);
   return images;
