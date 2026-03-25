@@ -35,11 +35,11 @@ function scrapeImagesFromPage(engine, keyword) {
 
   let rawImages = [];
   switch (engine) {
+    case 'google':
+      rawImages = scrapeGoogleImages(keyword);
+      break;
     case 'bing':
       rawImages = scrapeBingImages(keyword);
-      break;
-    case 'duckduckgo':
-      rawImages = scrapeDuckDuckGoImages(keyword);
       break;
     case 'yandex':
       rawImages = scrapeYandexImages(keyword);
@@ -62,6 +62,89 @@ function scrapeImagesFromPage(engine, keyword) {
     console.log(`⚠️ No images found. Check if selectors are correct for ${engine}`);
   }
   
+  return images;
+}
+
+/**
+ * Scrape images from Google image search
+ * @param {string} keyword - The search keyword
+ * @returns {Array} Array of image objects
+ */
+function scrapeGoogleImages(keyword) {
+  const images = [];
+  
+  console.log('🎯 Google: Looking for images...');
+  
+  // Google Images uses various selectors
+  // Try multiple approaches
+  let imageElements = document.querySelectorAll('img[data-src]');
+  
+  if (imageElements.length === 0) {
+    imageElements = document.querySelectorAll('.rg_i');
+  }
+  
+  if (imageElements.length === 0) {
+    // Fallback: get all images with decent size
+    const allImgs = document.querySelectorAll('img');
+    const filtered = [];
+    allImgs.forEach(img => {
+      const width = img.width || img.naturalWidth || 0;
+      const height = img.height || img.naturalHeight || 0;
+      if (width > 100 && height > 100) {
+        filtered.push(img);
+      }
+    });
+    imageElements = filtered;
+  }
+  
+  console.log(`🎯 Google: Found ${imageElements.length} image elements`);
+
+  imageElements.forEach((img, index) => {
+    try {
+      // Try to get the original image URL from data attributes
+      let imageUrl = img.getAttribute('data-src') || 
+                     img.getAttribute('data-iurl') ||
+                     img.src;
+      
+      const title = img.alt || img.title || '';
+      
+      // Skip invalid URLs
+      if (!imageUrl || !imageUrl.startsWith('http')) {
+        return;
+      }
+      
+      // Skip Google's own assets
+      if (imageUrl.includes('google.com') && !imageUrl.includes('googleusercontent')) {
+        return;
+      }
+      
+      // Try to get dimensions from parent element's metadata
+      let width = 0;
+      let height = 0;
+      
+      const parent = img.closest('[data-w]') || img.closest('div[jsname]');
+      if (parent) {
+        width = parseInt(parent.getAttribute('data-w')) || 0;
+        height = parseInt(parent.getAttribute('data-h')) || 0;
+      }
+
+      images.push({
+        url: imageUrl,
+        title: title || keyword,
+        width: width || 0,
+        height: height || 0,
+        source: 'google'
+      });
+      
+      if (index < 5) {
+        console.log(`✅ Google image ${index + 1}: ${imageUrl.substring(0, 80)}...`);
+      }
+    } catch (error) {
+      console.error('‼️ Error parsing Google image:', error);
+    }
+  });
+  
+  console.log(`✅ Google: Extracted ${images.length} images`);
   return images;
 }
 
@@ -116,93 +199,103 @@ function scrapeDuckDuckGoImages(keyword) {
   const images = [];
   
   console.log('🎯 DuckDuckGo: Looking for images...');
+  console.log('🎯 DuckDuckGo: Current URL:', window.location.href);
   
-  // Try multiple selectors as DuckDuckGo structure can vary
-  // First try: specific tile images
-  let imageElements = document.querySelectorAll('.tile--img__img');
+  // Try multiple selectors in order of preference
+  const selectors = [
+    '.tile--img',
+    '.tile',
+    '[data-id]',
+    '.tile--img__media',
+    'div[data-id] img',
+    '.tile img'
+  ];
   
-  // Fallback: try other possible selectors
-  if (imageElements.length === 0) {
-    imageElements = document.querySelectorAll('img[data-id]');
+  let elements = [];
+  for (const selector of selectors) {
+    elements = document.querySelectorAll(selector);
+    if (elements.length > 0) {
+      console.log(`🎯 DuckDuckGo: Found ${elements.length} elements using: ${selector}`);
+      break;
+    }
   }
   
-  if (imageElements.length === 0) {
-    imageElements = document.querySelectorAll('.tile img');
-  }
-  
-  // Last resort: get all images and filter
-  if (imageElements.length === 0) {
-    console.log('⚠️ DuckDuckGo: Using fallback - all img tags');
-    const allImages = document.querySelectorAll('img');
-    const validImages = [];
-    allImages.forEach(img => {
-      // Filter out tiny images (icons, logos, etc)
-      if (img.width > 100 || img.naturalWidth > 100 || img.getAttribute('width') > 100) {
-        validImages.push(img);
+  // If still no elements, try getting all images as last resort
+  if (elements.length === 0) {
+    console.log('⚠️ DuckDuckGo: No tiles found, scanning all images on page');
+    const allImgs = document.querySelectorAll('img');
+    console.log(`🎯 DuckDuckGo: Total images on page: ${allImgs.length}`);
+    
+    allImgs.forEach((img, idx) => {
+      if (idx < 5) {
+        console.log(`Image ${idx}: src=${img.src?.substring(0, 50)}, width=${img.width}, height=${img.height}`);
       }
     });
-    imageElements = validImages;
+    
+    // Filter to only significant images
+    elements = Array.from(allImgs).filter(img => {
+      const width = img.width || img.naturalWidth || 0;
+      const height = img.height || img.naturalHeight || 0;
+      return width > 80 && height > 80; // Filter out small icons
+    });
+    
+    console.log(`🎯 DuckDuckGo: Filtered to ${elements.length} significant images`);
   }
-  
-  console.log(`🎯 DuckDuckGo: Found ${imageElements.length} image elements`);
 
-  imageElements.forEach((img, index) => {
+  elements.forEach((elem, index) => {
     try {
-      // Get the highest quality source available
-      let src = img.getAttribute('data-src') || 
-                img.getAttribute('src') || 
-                img.currentSrc ||
-                img.getAttribute('data-lazy-src');
+      // Get the img element
+      let img = elem;
+      if (elem.tagName !== 'IMG') {
+        img = elem.querySelector('img');
+      }
       
-      // Skip if no valid source
-      if (!src || !src.startsWith('http')) {
+      if (!img) {
+        if (index < 3) console.log(`⚠️ Element ${index}: No img found`);
         return;
       }
       
-      // Skip DuckDuckGo's own assets
-      if (src.includes('duckduckgo.com') && !src.includes('external-content')) {
+      // Try all possible sources for image URL
+      let imageUrl = img.getAttribute('data-src') || 
+                     img.getAttribute('src') || 
+                     img.currentSrc ||
+                     img.getAttribute('data-lazy-src');
+      
+      const title = img.alt || img.title || '';
+      
+      if (index < 3) {
+        console.log(`Image ${index}: url=${imageUrl?.substring(0, 60)}, title=${title.substring(0, 30)}`);
+      }
+      
+      // Skip invalid URLs
+      if (!imageUrl || !imageUrl.startsWith('http')) {
+        if (index < 3) console.log(`⚠️ Image ${index}: Invalid URL`);
         return;
       }
       
-      const alt = img.alt || img.title || '';
-      
-      // Try to get original image URL from parent element's data attributes or link
-      const parent = img.closest('[data-id]') || img.closest('.tile') || img.closest('a');
-      let originalUrl = src;
-      
-      if (parent) {
-        // Check if parent is a link with better URL
-        if (parent.tagName === 'A' && parent.href && parent.href.startsWith('http')) {
-          // For DuckDuckGo, the link might contain the image parameter
-          const linkUrl = parent.href;
-          if (linkUrl.includes('http') && !linkUrl.includes('duckduckgo.com/y.js')) {
-            originalUrl = linkUrl;
-          }
-        }
+      // Skip DuckDuckGo's own icons/assets (but keep external-content)
+      if (imageUrl.includes('duckduckgo.com') && !imageUrl.includes('external-content')) {
+        if (index < 3) console.log(`⚠️ Image ${index}: DuckDuckGo internal asset`);
+        return;
       }
 
-      // Use the better of src or originalUrl
-      const finalUrl = originalUrl.length > src.length ? originalUrl : src;
-
-      if (finalUrl && finalUrl.startsWith('http')) {
-        images.push({
-          url: finalUrl,
-          title: alt || keyword,
-          width: img.naturalWidth || img.width || 0,
-          height: img.naturalHeight || img.height || 0,
-          source: 'duckduckgo'
-        });
-        
-        if (index < 5) {
-          console.log(`✅ DuckDuckGo image ${index + 1}: ${finalUrl.substring(0, 60)}...`);
-        }
+      images.push({
+        url: imageUrl,
+        title: title || keyword,
+        width: 0,  // Will use default in processing
+        height: 0,
+        source: 'duckduckgo'
+      });
+      
+      if (index < 5) {
+        console.log(`✅ DuckDuckGo image ${images.length}: ${imageUrl.substring(0, 80)}...`);
       }
     } catch (error) {
       console.error('‼️ Error parsing DuckDuckGo image:', error);
     }
   });
   
-  console.log(`✅ DuckDuckGo: Extracted ${images.length} images`);
+  console.log(`✅ DuckDuckGo: Extracted ${images.length} valid images`);
   return images;
 }
 

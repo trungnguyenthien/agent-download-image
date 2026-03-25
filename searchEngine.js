@@ -14,11 +14,11 @@ class SearchEngine {
     const encodedKeyword = encodeURIComponent(keyword);
     
     switch (engine.toLowerCase()) {
+      case 'google':
+        return `https://www.google.com/search?q=${encodedKeyword}&tbm=isch&start=${(page - 1) * 20}`;
+      
       case 'bing':
         return `https://www.bing.com/images/search?q=${encodedKeyword}&first=${(page - 1) * 35 + 1}`;
-      
-      case 'duckduckgo':
-        return `https://duckduckgo.com/?q=${encodedKeyword}&t=h_&iax=images&ia=images`;
       
       case 'yandex':
         return `https://yandex.com/images/search?text=${encodedKeyword}&p=${page - 1}`;
@@ -33,7 +33,7 @@ class SearchEngine {
    * @returns {string[]} Array of engine names
    */
   static getSupportedEngines() {
-    return ['bing', 'duckduckgo', 'yandex'];
+    return ['google', 'bing', 'yandex'];
   }
 
   /**

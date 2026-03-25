@@ -4,7 +4,7 @@ Chrome Extension v3 for searching and downloading images from multiple search en
 
 ## Features
 
-- 🔍 Search images across 3 search engines: Bing, DuckDuckGo, Yandex
+- 🔍 Search images across 3 search engines: Google, Bing, Yandex
 - ✅ Automatic image validation (minimum 300x300px)
 - 📦 Batch download multiple images
 - 🎯 Keyword matching in title/alt text

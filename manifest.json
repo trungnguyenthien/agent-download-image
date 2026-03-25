@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Image Search & Download",
   "version": "1.0.0",
-  "description": "Search and download images from Bing, DuckDuckGo, and Yandex",
+  "description": "Search and download images from Google, Bing, and Yandex",
   "icons": {
     "16": "icon.png",
     "48": "icon.png",

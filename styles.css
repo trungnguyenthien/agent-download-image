@@ -259,13 +259,13 @@ body {
   text-transform: uppercase;
 }
 
-.badge-bing {
-  background: #008373;
+.badge-google {
+  background: #4285f4;
   color: white;
 }
 
-.badge-duckduckgo {
-  background: #de5833;
+.badge-bing {
+  background: #008373;
   color: white;
 }
 

@@ -38,8 +38,8 @@ class ImageSearchApp {
 
     // Get selected engines
     this.engineCheckboxes = {
+      google: document.getElementById('engine-google'),
       bing: document.getElementById('engine-bing'),
-      duckduckgo: document.getElementById('engine-duckduckgo'),
       yandex: document.getElementById('engine-yandex')
     };
   }
@@ -175,10 +175,10 @@ class ImageSearchApp {
    * @param {string} engine - The search engine
    */
   async searchKeywordOnEngine(keyword, engine) {
-    // For infinite scroll engines (Yandex, DuckDuckGo), use single tab with multiple scrolls
+    // For infinite scroll engines (Yandex), use single tab with multiple scrolls
     // For traditional pagination engines (Bing), use multiple tabs
     
-    if (engine === 'yandex' || engine === 'duckduckgo') {
+    if (engine === 'yandex') {
       await this.searchWithInfiniteScroll(keyword, engine);
     } else {
       await this.searchWithPagination(keyword, engine);
@@ -234,18 +234,87 @@ class ImageSearchApp {
         
         // Scrape images after each scroll
         try {
-          const response = await chrome.tabs.sendMessage(tab.id, {
-            action: 'scrapeImages',
-            engine: engine,
-            keyword: keyword
+          // First, inspect what's on the page
+          const inspectResult = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+              return {
+                url: window.location.href,
+                title: document.title,
+                totalImages: document.querySelectorAll('img').length,
+                tiles: document.querySelectorAll('.tile').length,
+                tilesImg: document.querySelectorAll('.tile--img').length,
+                bodyText: document.body.innerText.substring(0, 200)
+              };
+            }
           });
+          
+          if (inspectResult && inspectResult[0]) {
+            console.log('🎯 Page inspection:', inspectResult[0].result);
+          }
+          
+          // Try using content script first
+          let images = null;
+          try {
+            const response = await chrome.tabs.sendMessage(tab.id, {
+              action: 'scrapeImages',
+              engine: engine,
+              keyword: keyword
+            });
+            
+            if (response && response.images) {
+              images = response.images;
+            }
+          } catch (contentScriptError) {
+            console.log('⚠️ Content script not responding, using direct scraping');
+          }
+          
+          // If content script failed, scrape directly
+          if (!images || images.length === 0) {
+            console.log('🎯 Trying direct scraping via executeScript');
+            const scrapeResult = await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: (kw) => {
+                const imgs = [];
+                const allImages = document.querySelectorAll('img');
+                
+                allImages.forEach(img => {
+                  const src = img.src || img.getAttribute('data-src');
+                  const width = img.width || img.naturalWidth || 0;
+                  const height = img.height || img.naturalHeight || 0;
+                  
+                  // Only get significant images
+                  if (src && src.startsWith('http') && width > 80 && height > 80) {
+                    // Skip DuckDuckGo internal assets
+                    if (!src.includes('duckduckgo.com') || src.includes('external-content')) {
+                      imgs.push({
+                        url: src,
+                        title: img.alt || img.title || kw,
+                        width: width,
+                        height: height,
+                        source: 'duckduckgo'
+                      });
+                    }
+                  }
+                });
+                
+                return imgs;
+              },
+              args: [keyword]
+            });
+            
+            if (scrapeResult && scrapeResult[0] && scrapeResult[0].result) {
+              images = scrapeResult[0].result;
+              console.log(`🎯 Direct scraping found ${images.length} images`);
+            }
+          }
 
-          if (response && response.images) {
-            console.log(`🎯 Scraped ${response.images.length} images from ${engine} (scroll ${i})`);
-            await this.processScrapedImages(response.images, keyword);
+          if (images && images.length > 0) {
+            console.log(`🎯 Scraped ${images.length} images from ${engine} (scroll ${i})`);
+            await this.processScrapedImages(images, keyword);
           }
         } catch (msgError) {
-          console.log('⚠️ Error sending message:', msgError);
+          console.log('⚠️ Error during scraping:', msgError);
         }
       }
 
@@ -298,17 +367,119 @@ class ImageSearchApp {
 
         // Scrape images from the page
         try {
-          const response = await chrome.tabs.sendMessage(tab.id, {
-            action: 'scrapeImages',
-            engine: engine,
-            keyword: keyword
+          // Inspect the page
+          const inspectResult = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+              return {
+                url: window.location.href,
+                totalImages: document.querySelectorAll('img').length
+              };
+            }
           });
+          
+          if (inspectResult && inspectResult[0]) {
+            console.log('🎯 Page inspection:', inspectResult[0].result);
+          }
+          
+          // Try content script first
+          let images = null;
+          try {
+            const response = await chrome.tabs.sendMessage(tab.id, {
+              action: 'scrapeImages',
+              engine: engine,
+              keyword: keyword
+            });
+            
+            if (response && response.images) {
+              images = response.images;
+            }
+          } catch (contentScriptError) {
+            console.log('⚠️ Content script not responding, using direct scraping');
+          }
+          
+          // Fallback to direct scraping
+          if (!images || images.length === 0) {
+            console.log('🎯 Using direct scraping for', engine);
+            const scrapeResult = await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: (eng, kw) => {
+                const imgs = [];
+                
+                if (eng === 'google') {
+                  // Google Images scraping
+                  const elements = document.querySelectorAll('img');
+                  elements.forEach(img => {
+                    const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-iurl');
+                    const width = img.width || img.naturalWidth || 0;
+                    const height = img.height || img.naturalHeight || 0;
+                    
+                    if (src && src.startsWith('http') && width > 100 && height > 100) {
+                      if (!src.includes('google.com') || src.includes('googleusercontent')) {
+                        imgs.push({
+                          url: src,
+                          title: img.alt || img.title || kw,
+                          width: width,
+                          height: height,
+                          source: 'google'
+                        });
+                      }
+                    }
+                  });
+                } else if (eng === 'bing') {
+                  const elements = document.querySelectorAll('.iusc');
+                  elements.forEach(elem => {
+                    try {
+                      const data = JSON.parse(elem.getAttribute('m') || '{}');
+                      if (data.murl) {
+                        imgs.push({
+                          url: data.murl,
+                          title: data.t || kw,
+                          width: data.w || 0,
+                          height: data.h || 0,
+                          source: 'bing'
+                        });
+                      }
+                    } catch (e) {}
+                  });
+                } else {
+                  // Generic scraping for Yandex
+                  const allImages = document.querySelectorAll('img');
+                  allImages.forEach(img => {
+                    const src = img.src || img.getAttribute('data-src');
+                    const width = img.width || img.naturalWidth || 0;
+                    const height = img.height || img.naturalHeight || 0;
+                    
+                    if (src && src.startsWith('http') && width > 80 && height > 80) {
+                      if (!src.includes(eng + '.com') || src.includes('external')) {
+                        imgs.push({
+                          url: src,
+                          title: img.alt || img.title || kw,
+                          width: width,
+                          height: height,
+                          source: eng
+                        });
+                      }
+                    }
+                  });
+                }
+                
+                return imgs;
+              },
+              args: [engine, keyword]
+            });
+            
+            if (scrapeResult && scrapeResult[0] && scrapeResult[0].result) {
+              images = scrapeResult[0].result;
+              console.log(`🎯 Direct scraping found ${images.length} images`);
+            }
+          }
 
-          if (response && response.images) {
-            console.log(`🎯 Scraped ${response.images.length} images from ${engine} page ${page}`);
-            await this.processScrapedImages(response.images, keyword);
+          if (images && images.length > 0) {
+            console.log(`🎯 Scraped ${images.length} images from ${engine} page ${page}`);
+            await this.processScrapedImages(images, keyword);
           } else {
-            console.log(`⚠️ No response from ${engine} scraper`);
+            console.log(`⚠️ No images found from ${engine} page ${page}`);
           }
         } catch (msgError) {
           console.log('⚠️ Could not scrape page (may be loading):', msgError.message);
